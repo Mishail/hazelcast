@@ -28,9 +28,11 @@ public final class Packet extends DataWriter implements SocketWritable {
     public static final byte PACKET_VERSION = 1;
 
     public static final int HEADER_OP = 0;
-    public static final int HEADER_EVENT = 1;
+    public static final int HEADER_BACKUP = 1;
+    public static final int HEADER_EVENT = 2;
 
     private byte header;
+    private int someHash;
 
     private transient Connection conn;
 
@@ -61,16 +63,24 @@ public final class Packet extends DataWriter implements SocketWritable {
         return (header & 1 << bit) != 0;
     }
 
+    public void setSomeHash(int someHash) {
+        this.someHash = someHash;
+    }
+
     public void onEnqueue() {
     }
 
     public final boolean writeTo(ByteBuffer destination) {
         // TODO: @mm - think about packet versions
         if (!isStatusSet(stHeader)) {
-            if (!destination.hasRemaining()) {
+//            if (!destination.hasRemaining()) {
+//                return false;
+//            }
+            if (destination.remaining() < 5) {
                 return false;
             }
             destination.put(header);
+            destination.putInt(someHash);
             setStatus(stHeader);
         }
         return super.writeTo(destination);
@@ -79,16 +89,24 @@ public final class Packet extends DataWriter implements SocketWritable {
     public final boolean readFrom(ByteBuffer source) {
         // TODO: @mm - think about packet versions
         if (!isStatusSet(stHeader)) {
-            if (!source.hasRemaining()) {
+//            if (!source.hasRemaining()) {
+//                return false;
+//            }
+            if (source.remaining() < 5) {
                 return false;
             }
             header = source.get();
+            someHash = source.getInt();
             setStatus(stHeader);
         }
         return super.readFrom(source);
     }
 
     public int size() {
-        return (data == null) ? 1 : data.totalSize() + 1;
+        return (data == null) ? 1 : data.totalSize() + 1; // + 5
+    }
+
+    public int getSomeHash() {
+        return someHash;
     }
 }

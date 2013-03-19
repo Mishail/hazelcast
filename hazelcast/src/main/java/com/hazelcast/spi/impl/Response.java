@@ -24,7 +24,7 @@ import com.hazelcast.spi.AbstractOperation;
 
 import java.io.IOException;
 
-public final class Response extends AbstractOperation implements ResponseOperation, IdentifiedDataSerializable {
+public final class Response extends AbstractOperation implements IdentifiedDataSerializable {
 
     private Object result = null;
     private boolean exception = false;

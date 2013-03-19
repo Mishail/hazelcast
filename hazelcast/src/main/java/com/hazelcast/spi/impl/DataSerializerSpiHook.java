@@ -56,7 +56,7 @@ public final class DataSerializerSpiHook implements DataSerializerHook {
 
         factories.put(MULTI_RESPONSE, new DataSerializableFactory() {
             public IdentifiedDataSerializable create() {
-                return new MultiResponse();
+                return new ResponseWithBackup();
             }
         });
 

@@ -38,6 +38,7 @@ import com.hazelcast.util.Clock;
 import com.hazelcast.util.ExceptionUtil;
 import com.hazelcast.util.SpinLock;
 import com.hazelcast.util.SpinReadWriteLock;
+import com.hazelcast.util.executor.ExecutorThreadFactory;
 import com.hazelcast.util.executor.FastExecutor;
 import com.hazelcast.util.executor.PoolExecutorThreadFactory;
 
@@ -59,9 +60,9 @@ final class OperationServiceImpl implements OperationService {
     private final AtomicLong localIdGen = new AtomicLong();
     private final ConcurrentMap<Long, Call> mapCalls = new ConcurrentHashMap<Long, Call>(1000);
     private final Lock[] ownerLocks;
-    private final Lock[] backupLocks;
     private final SpinReadWriteLock[] partitionLocks;
     private final FastExecutor executor;
+    private final Executor[] backupExecutors;
     private final long defaultCallTimeout;
     private final Set<CallKey> executingCalls = Collections.newSetFromMap(new ConcurrentHashMap<CallKey, Boolean>());
 
@@ -85,13 +86,19 @@ final class OperationServiceImpl implements OperationService {
             }
         });
 
+        backupExecutors = new Executor[3];
+        for (int i = 0; i < backupExecutors.length; i++) {
+            final int id = i;
+            backupExecutors[i] = Executors.newSingleThreadExecutor(new ExecutorThreadFactory(node.threadGroup, node.getConfig().getClassLoader()) {
+                protected String newThreadName() {
+                    return node.getThreadNamePrefix("backup.handler-") + id;
+                }
+            });
+        }
+
         ownerLocks = new Lock[100000];
         for (int i = 0; i < ownerLocks.length; i++) {
             ownerLocks[i] = new ReentrantLock();
-        }
-        backupLocks = new Lock[10000];
-        for (int i = 0; i < backupLocks.length; i++) {
-            backupLocks[i] = new ReentrantLock();
         }
         int partitionCount = node.groupProperties.PARTITION_COUNT.getInteger();
         partitionLocks = new SpinReadWriteLock[partitionCount];
@@ -110,9 +117,15 @@ final class OperationServiceImpl implements OperationService {
     }
 
     @PrivateApi
-    public void handleOperation(final Packet packet) {
+    void handleOperation(final Packet packet) {
         try {
-            executor.execute(new RemoteOperationProcessor(packet));
+            if (packet.isHeaderSet(Packet.HEADER_BACKUP)) {
+                final int hash = packet.getSomeHash();
+                final Executor ex = backupExecutors[Math.abs(hash) % backupExecutors.length];
+                ex.execute(new BackupOperationProcessor(packet));
+            } else {
+                executor.execute(new RemoteOperationProcessor(packet));
+            }
         } catch (RejectedExecutionException e) {
             if (nodeEngine.isActive()) {
                 throw e;
@@ -178,9 +191,6 @@ final class OperationServiceImpl implements OperationService {
                     if (op instanceof KeyBasedOperation) {
                         final int hash = ((KeyBasedOperation) op).getKeyHash();
                         Lock[] lockGroup = ownerLocks;
-                        if (op instanceof BackupOperation) {
-                            lockGroup = backupLocks;
-                        }
                         keyLock = lockGroup[Math.abs(hash) % lockGroup.length];
                         keyLock.lock();
                     }
@@ -283,6 +293,49 @@ final class OperationServiceImpl implements OperationService {
         }
     }
 
+    private void runBackup(Operation op) {
+        final ThreadContext threadContext = ThreadContext.getOrCreate();
+        SpinLock partitionLock = null;
+        try {
+            threadContext.setCurrentOperation(op);
+            final int partitionId = op.getPartitionId();
+            if (op instanceof PartitionAwareOperation) {
+                if (partitionId < 0) {
+                    throw new IllegalArgumentException();
+                }
+                if (!isMigrationOperation(op) && node.partitionService.isPartitionMigrating(partitionId)) {
+                    throw new PartitionMigratingException(node.getThisAddress(), partitionId,
+                            op.getClass().getName(), op.getServiceName());
+                }
+                partitionLock = partitionLocks[partitionId].readLock();
+                if (!partitionLock.tryLock(500, TimeUnit.MILLISECONDS)) {
+                    partitionLock = null;
+                    throw new PartitionMigratingException(node.getThisAddress(), partitionId,
+                            op.getClass().getName(), op.getServiceName());
+                }
+                PartitionInfo partitionInfo = nodeEngine.getPartitionService().getPartitionInfo(partitionId);
+                final Address owner = partitionInfo.getReplicaAddress(op.getReplicaIndex());
+                final boolean validatesTarget = op.validatesTarget();
+                if (validatesTarget && !node.getThisAddress().equals(owner)) {
+                    throw new WrongTargetException(node.getThisAddress(), owner, partitionId, op.getReplicaIndex(),
+                            op.getClass().getName(), op.getServiceName());
+                }
+            }
+            OperationAccessor.setStartTime(op, Clock.currentTimeMillis());
+            op.beforeRun();
+            op.run();
+            sendResponse(op, null);
+            op.afterRun();
+        } catch (Throwable e) {
+            handleOperationError(op, e);
+        } finally {
+            if (partitionLock != null) {
+                partitionLock.unlock();
+            }
+            threadContext.setCurrentOperation(null);
+        }
+    }
+
     private void handleBackupAndSendResponse(BackupAwareOperation backupAwareOp) throws Exception {
         final int maxRetryCount = 50;
         final int maxBackups = node.getClusterService().getSize() - 1;
@@ -311,9 +364,8 @@ final class OperationServiceImpl implements OperationService {
                         if (target.equals(node.getThisAddress())) {
                             throw new IllegalStateException("Normally shouldn't happen!!");
                         } else {
-                            // disabled optimization...
-                            if (false && op.returnsResponse() && target.equals(op.getCallerAddress())) {
-//                                TODO: @mm - FIX ME! what if backup migrates after response is returned?
+                            // TODO: @mm - FIX ME! what if backup migrates after response is returned?
+                            if (op.returnsResponse() && target.equals(op.getCallerAddress())) {
                                 backupOp.setServiceName(serviceName).setReplicaIndex(replicaIndex).setPartitionId(partitionId);
                                 backupResponse = backupOp;
                             } else {
@@ -350,8 +402,8 @@ final class OperationServiceImpl implements OperationService {
             }
         }
         final Object response = op.returnsResponse()
-                ? (backupResponse == null ? op.getResponse() :
-                new MultiResponse(nodeEngine.getSerializationService(), backupResponse, op.getResponse())) : null;
+                ? (backupResponse == null ? op.getResponse()
+                : new ResponseWithBackup(backupResponse, op.getResponse())) : null;
         waitBackupResponses(syncBackups);
         sendResponse(op, response);
         waitBackupResponses(asyncBackups);
@@ -555,6 +607,10 @@ final class OperationServiceImpl implements OperationService {
     public boolean send(final Operation op, final Connection connection) {
         Data opData = nodeEngine.toData(op);
         Packet packet = new Packet(opData, nodeEngine.getSerializationContext());
+        if (op instanceof BackupOperation ){
+            packet.setHeader(Packet.HEADER_BACKUP, true);
+            packet.setSomeHash(op instanceof KeyBasedOperation ? ((KeyBasedOperation) op).getKeyHash() : 0);
+        }
         packet.setHeader(Packet.HEADER_OP, true);
         return nodeEngine.send(packet, connection);
     }
@@ -600,6 +656,10 @@ final class OperationServiceImpl implements OperationService {
     void shutdown() {
         logger.log(Level.FINEST, "Stopping operation threads...");
         executor.shutdown();
+        for (Executor executor : backupExecutors) {
+            ExecutorService ex = (ExecutorService) executor;
+            ex.shutdown();
+        }
         final Object response = new HazelcastInstanceNotActiveException();
         for (Call call : mapCalls.values()) {
             call.offerResponse(response);
@@ -607,9 +667,6 @@ final class OperationServiceImpl implements OperationService {
         mapCalls.clear();
         for (int i = 0; i < ownerLocks.length; i++) {
             ownerLocks[i] = null;
-        }
-        for (int i = 0; i < backupLocks.length; i++) {
-            backupLocks[i] = null;
         }
     }
 
@@ -665,15 +722,27 @@ final class OperationServiceImpl implements OperationService {
                 final Operation op = (Operation) nodeEngine.toObject(data);
                 op.setNodeEngine(nodeEngine).setCallerAddress(caller);
                 op.setConnection(conn);
-                if (op instanceof ResponseOperation) {
+                if (op instanceof Response) {
                     processResponse(op);
+//                } else if (op instanceof BackupOperation) {
+//                    ResponseHandlerFactory.setRemoteResponseHandler(nodeEngine, op);
+//                    if (op instanceof KeyBasedOperation) {
+//                        final int hash = ((KeyBasedOperation) op).getKeyHash();
+//                        final Executor ex = backupExecutors[Math.abs(hash) % backupExecutors.length];
+//                        ex.execute(new Runnable() {
+//                            public void run() {
+//                                runBackup(op);
+//                            }
+//                        });
+//                    } else {
+//                        runBackup(op);
+//                    }
                 } else {
                     ResponseHandlerFactory.setRemoteResponseHandler(nodeEngine, op);
                     runOperation(op);
                 }
             } catch (Throwable e) {
                 logger.log(Level.SEVERE, e.getMessage(), e);
-//                send(new ErrorResponse(node.getThisAddress(), e), conn);
             }
         }
 
@@ -684,6 +753,29 @@ final class OperationServiceImpl implements OperationService {
                 op.afterRun();
             } catch (Throwable e) {
                 logger.log(Level.SEVERE, "While processing response...", e);
+            }
+        }
+    }
+
+    private class BackupOperationProcessor implements Runnable {
+        private final Packet packet;
+
+        public BackupOperationProcessor(Packet packet) {
+            this.packet = packet;
+        }
+
+        public void run() {
+            final Connection conn = packet.getConn();
+            try {
+                final Address caller = conn.getEndPoint();
+                final Data data = packet.getData();
+                final Operation op = (Operation) nodeEngine.toObject(data);
+                op.setNodeEngine(nodeEngine).setCallerAddress(caller);
+                op.setConnection(conn);
+                ResponseHandlerFactory.setRemoteResponseHandler(nodeEngine, op);
+                runBackup(op);
+            } catch (Throwable e) {
+                logger.log(Level.SEVERE, e.getMessage(), e);
             }
         }
     }
@@ -730,13 +822,5 @@ final class OperationServiceImpl implements OperationService {
     private static boolean isMigrationOperation(Operation op) {
         return op instanceof MigrationCycleOperation
                 && op.getClass().getClassLoader() == thisClassLoader;
-    }
-
-    public String toString() {
-        final StringBuilder sb = new StringBuilder();
-        sb.append("nodeEngineImpl");
-        sb.append("{node=").append(node);
-        sb.append('}');
-        return sb.toString();
     }
 }
