@@ -607,10 +607,10 @@ final class OperationServiceImpl implements OperationService {
     public boolean send(final Operation op, final Connection connection) {
         Data opData = nodeEngine.toData(op);
         Packet packet = new Packet(opData, nodeEngine.getSerializationContext());
-        if (op instanceof BackupOperation ){
-            packet.setHeader(Packet.HEADER_BACKUP, true);
-            packet.setSomeHash(op instanceof KeyBasedOperation ? ((KeyBasedOperation) op).getKeyHash() : 0);
-        }
+//        if (op instanceof BackupOperation ){
+//            packet.setHeader(Packet.HEADER_BACKUP, true);
+//            packet.setSomeHash(op instanceof KeyBasedOperation ? ((KeyBasedOperation) op).getKeyHash() : 0);
+//        }
         packet.setHeader(Packet.HEADER_OP, true);
         return nodeEngine.send(packet, connection);
     }
