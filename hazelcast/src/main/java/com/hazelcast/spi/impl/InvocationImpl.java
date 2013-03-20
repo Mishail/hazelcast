@@ -27,10 +27,7 @@ import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.partition.PartitionInfo;
 import com.hazelcast.spi.*;
-import com.hazelcast.spi.exception.RetryableException;
-import com.hazelcast.spi.exception.RetryableIOException;
-import com.hazelcast.spi.exception.TargetNotMemberException;
-import com.hazelcast.spi.exception.WrongTargetException;
+import com.hazelcast.spi.exception.*;
 import com.hazelcast.util.Clock;
 import com.hazelcast.util.ExceptionUtil;
 
@@ -246,13 +243,14 @@ abstract class InvocationImpl implements Future, Invocation {
                 final int localInvokeCount = invokeCount;
                 if (action == InvocationAction.RETRY_INVOCATION && localInvokeCount < tryCount && timeout > 0) {
                     if (localInvokeCount > 3) {
+                        final long sleepTime = error instanceof PartitionMigratingException ? 10 : tryPauseMillis;
                         try {
-                            Thread.sleep(tryPauseMillis);
+                            Thread.sleep(sleepTime);
+                            timeout = decrementTimeout(timeout, sleepTime);
                         } catch (InterruptedException e) {
                             return e;
                         }
                     }
-                    timeout = decrementTimeout(timeout, tryPauseMillis);
                     // TODO: @mm - improve logging (see SystemLogService)
                     if (localInvokeCount > 99 && localInvokeCount % 10 == 0) {
                         logger.log(Level.WARNING, "Retrying invocation: " + toString() + ", Reason: " + error);
