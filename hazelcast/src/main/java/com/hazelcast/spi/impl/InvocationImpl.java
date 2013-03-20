@@ -243,7 +243,7 @@ abstract class InvocationImpl implements Future, Invocation {
                 final int localInvokeCount = invokeCount;
                 if (action == InvocationAction.RETRY_INVOCATION && localInvokeCount < tryCount && timeout > 0) {
                     if (localInvokeCount > 3) {
-                        final long sleepTime = error instanceof PartitionMigratingException ? 50 : tryPauseMillis;
+                        final long sleepTime = error instanceof PartitionMigratingException ? 100 : tryPauseMillis;
                         try {
                             Thread.sleep(sleepTime);
                             timeout = decrementTimeout(timeout, sleepTime);
