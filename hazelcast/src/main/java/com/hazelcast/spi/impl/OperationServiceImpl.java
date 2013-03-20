@@ -724,19 +724,6 @@ final class OperationServiceImpl implements OperationService {
                 op.setConnection(conn);
                 if (op instanceof Response) {
                     processResponse(op);
-//                } else if (op instanceof BackupOperation) {
-//                    ResponseHandlerFactory.setRemoteResponseHandler(nodeEngine, op);
-//                    if (op instanceof KeyBasedOperation) {
-//                        final int hash = ((KeyBasedOperation) op).getKeyHash();
-//                        final Executor ex = backupExecutors[Math.abs(hash) % backupExecutors.length];
-//                        ex.execute(new Runnable() {
-//                            public void run() {
-//                                runBackup(op);
-//                            }
-//                        });
-//                    } else {
-//                        runBackup(op);
-//                    }
                 } else {
                     ResponseHandlerFactory.setRemoteResponseHandler(nodeEngine, op);
                     runOperation(op);
