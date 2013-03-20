@@ -119,7 +119,7 @@ final class OperationServiceImpl implements OperationService {
     @PrivateApi
     void handleOperation(final Packet packet) {
         try {
-            if (packet.isHeaderSet(Packet.HEADER_BACKUP)) {
+            if (false && packet.isHeaderSet(Packet.HEADER_BACKUP)) {
                 final int hash = packet.getSomeHash();
                 final Executor ex = backupExecutors[Math.abs(hash) % backupExecutors.length];
                 ex.execute(new BackupOperationProcessor(packet));
