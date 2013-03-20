@@ -30,7 +30,7 @@ import java.util.logging.Level;
  * @mdogan 10/1/12
  */
 
-final class ResponseWithBackup extends AbstractOperation implements BackupOperation, /*KeyBasedOperation,*/ IdentifiedDataSerializable {
+final class ResponseWithBackup extends AbstractOperation implements BackupOperation, KeyBasedOperation, IdentifiedDataSerializable {
 
     private int keyHash;
 

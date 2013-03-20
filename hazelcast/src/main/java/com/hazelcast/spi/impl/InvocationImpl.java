@@ -252,7 +252,7 @@ abstract class InvocationImpl implements Future, Invocation {
                     }
                     timeout = decrementTimeout(timeout, tryPauseMillis);
                     // TODO: @mm - improve logging (see SystemLogService)
-                    if (localInvokeCount > 5 && localInvokeCount % 10 == 0) {
+                    if (localInvokeCount > 99 && localInvokeCount % 10 == 0) {
                         logger.log(Level.WARNING, "Retrying invocation: " + toString() + ", Reason: " + error);
                     }
                     doInvoke();
