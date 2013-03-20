@@ -24,7 +24,6 @@ import com.hazelcast.nio.serialization.IdentifiedDataSerializable;
 import com.hazelcast.spi.*;
 
 import java.io.IOException;
-import java.util.logging.Level;
 
 /**
  * @mdogan 10/1/12
@@ -52,14 +51,16 @@ final class ResponseWithBackup extends AbstractOperation implements BackupOperat
         this.keyHash = backupOp instanceof KeyBasedOperation ? ((KeyBasedOperation) backupOp).getKeyHash() : 0;
     }
 
-    public void beforeRun() throws Exception {
+    public void prepare() throws Exception {
         final NodeEngine nodeEngine = getNodeEngine();
         if (backupOp != null) {
             backupOp.setNodeEngine(nodeEngine)
                     .setCallerAddress(getCallerAddress())
                     .setCallerUuid(getCallerUuid())
                     .setConnection(getConnection())
-                    .setResponseHandler(ResponseHandlerFactory.createEmptyResponseHandler());
+                    .setResponseHandler(ResponseHandlerFactory.createEmptyResponseHandler())
+//                    .setResponseHandler(ResponseHandlerFactory.createErrorLoggingResponseHandler(nodeEngine.getLogger(backupOp.getClass())))
+            ;
             OperationAccessor.setStartTime(backupOp, getStartTime());
         }
 
@@ -71,23 +72,55 @@ final class ResponseWithBackup extends AbstractOperation implements BackupOperat
         OperationAccessor.setCallId(response, getCallId());
     }
 
+    public Operation getBackupOp() {
+        return backupOp;
+    }
+
+    public Response getResponse() {
+        return response;
+    }
+
+    //    public void beforeRun() throws Exception {
+//        final NodeEngine nodeEngine = getNodeEngine();
+//        if (backupOp != null) {
+//            backupOp.setNodeEngine(nodeEngine)
+//                    .setCallerAddress(getCallerAddress())
+//                    .setCallerUuid(getCallerUuid())
+//                    .setConnection(getConnection());
+//            OperationAccessor.setStartTime(backupOp, getStartTime());
+//        }
+//
+//        response = responseObject instanceof Response ? (Response) responseObject : new Response(responseObject);
+//        response.setNodeEngine(nodeEngine)
+//                .setCallerAddress(getCallerAddress())
+//                .setCallerUuid(getCallerUuid())
+//                .setConnection(getConnection());
+//        OperationAccessor.setCallId(response, getCallId());
+//    }
+
+
+    public void beforeRun() throws Exception {
+        throw new UnsupportedOperationException();
+    }
+
     public void run() throws Exception {
-        if (backupOp != null) {
-            try {
-                backupOp.beforeRun();
-                backupOp.run();
-                backupOp.afterRun();
-            } catch (Throwable e) {
-                getLogger().log(Level.WARNING, "While executing backup operation within ResponseWithBackup: " + e.getMessage(), e);
-            }
-        }
-        try {
-            response.beforeRun();
-            response.run();
-            response.afterRun();
-        } catch (Throwable e) {
-            getLogger().log(Level.SEVERE, "While processing response...", e);
-        }
+        throw new UnsupportedOperationException();
+//        if (backupOp != null) {
+//            try {
+//                backupOp.beforeRun();
+//                backupOp.run();
+//                backupOp.afterRun();
+//            } catch (Throwable e) {
+//                getLogger().log(Level.WARNING, "While executing backup operation within ResponseWithBackup: " + e.getMessage(), e);
+//            }
+//        }
+//        try {
+//            response.beforeRun();
+//            response.run();
+//            response.afterRun();
+//        } catch (Throwable e) {
+//            getLogger().log(Level.SEVERE, "While processing response...", e);
+//        }
     }
 
     private ILogger getLogger() {
@@ -95,6 +128,7 @@ final class ResponseWithBackup extends AbstractOperation implements BackupOperat
     }
 
     public void afterRun() throws Exception {
+        throw new UnsupportedOperationException();
     }
 
     public int getKeyHash() {

@@ -327,7 +327,10 @@ final class OperationServiceImpl implements OperationService {
             sendResponse(op, null);
             op.afterRun();
         } catch (Throwable e) {
-            handleOperationError(op, e);
+//            handleOperationError(op, e);
+            if (node.isActive()) {
+                sendResponse(op, e);
+            }
         } finally {
             if (partitionLock != null) {
                 partitionLock.unlock();
@@ -475,7 +478,7 @@ final class OperationServiceImpl implements OperationService {
             final Level level = nodeEngine.isActive() ? Level.SEVERE : Level.FINEST;
             logger.log(level, "While executing op: " + op + " -> " + e.getMessage(), e);
         }
-        if (node.isActive()) {
+        if (node.isActive() && op.getResponseHandler() != null) {
             sendResponse(op, e);
         }
     }
@@ -708,7 +711,7 @@ final class OperationServiceImpl implements OperationService {
     }
 
     private class RemoteOperationProcessor implements Runnable {
-        private final Packet packet;
+        final Packet packet;
 
         public RemoteOperationProcessor(Packet packet) {
             this.packet = packet;
@@ -733,7 +736,7 @@ final class OperationServiceImpl implements OperationService {
             }
         }
 
-        private void processResponse(Operation op) {
+        void processResponse(Operation op) {
             try {
                 op.beforeRun();
                 op.run();
@@ -744,11 +747,10 @@ final class OperationServiceImpl implements OperationService {
         }
     }
 
-    private class BackupOperationProcessor implements Runnable {
-        private final Packet packet;
+    private class BackupOperationProcessor extends RemoteOperationProcessor implements Runnable {
 
         public BackupOperationProcessor(Packet packet) {
-            this.packet = packet;
+            super(packet);
         }
 
         public void run() {
@@ -759,8 +761,15 @@ final class OperationServiceImpl implements OperationService {
                 final Operation op = (Operation) nodeEngine.toObject(data);
                 op.setNodeEngine(nodeEngine).setCallerAddress(caller);
                 op.setConnection(conn);
-                ResponseHandlerFactory.setRemoteResponseHandler(nodeEngine, op);
-                runBackup(op);
+                if (op instanceof ResponseWithBackup) {
+                    ResponseWithBackup rwb = (ResponseWithBackup) op;
+                    rwb.prepare();
+                    runBackup(rwb.getBackupOp());
+                    processResponse(rwb.getResponse());
+                } else {
+                    ResponseHandlerFactory.setRemoteResponseHandler(nodeEngine, op);
+                    runBackup(op);
+                }
             } catch (Throwable e) {
                 logger.log(Level.SEVERE, e.getMessage(), e);
             }
