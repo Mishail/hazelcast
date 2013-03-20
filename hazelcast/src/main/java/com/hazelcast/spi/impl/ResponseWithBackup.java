@@ -24,12 +24,13 @@ import com.hazelcast.nio.serialization.IdentifiedDataSerializable;
 import com.hazelcast.spi.*;
 
 import java.io.IOException;
+import java.util.logging.Level;
 
 /**
  * @mdogan 10/1/12
  */
 
-final class ResponseWithBackup extends AbstractOperation implements BackupOperation, KeyBasedOperation, IdentifiedDataSerializable {
+final class ResponseWithBackup extends AbstractOperation implements BackupOperation, /*KeyBasedOperation, */IdentifiedDataSerializable {
 
     private int keyHash;
 
@@ -51,15 +52,25 @@ final class ResponseWithBackup extends AbstractOperation implements BackupOperat
         this.keyHash = backupOp instanceof KeyBasedOperation ? ((KeyBasedOperation) backupOp).getKeyHash() : 0;
     }
 
-    public void prepare() throws Exception {
+    public void beforeRun() throws Exception {
+//    public void prepare() throws Exception {
         final NodeEngine nodeEngine = getNodeEngine();
         if (backupOp != null) {
             backupOp.setNodeEngine(nodeEngine)
                     .setCallerAddress(getCallerAddress())
                     .setCallerUuid(getCallerUuid())
                     .setConnection(getConnection())
-                    .setResponseHandler(ResponseHandlerFactory.createEmptyResponseHandler())
+//                    .setResponseHandler(ResponseHandlerFactory.createEmptyResponseHandler())
 //                    .setResponseHandler(ResponseHandlerFactory.createErrorLoggingResponseHandler(nodeEngine.getLogger(backupOp.getClass())))
+                    .setResponseHandler(new ResponseHandler() {
+                        public void sendResponse(Object obj) {
+                            if (obj instanceof Throwable) {
+                                Throwable t = (Throwable) obj;
+                                nodeEngine.getLogger(backupOp.getClass()).log(Level.WARNING,
+                                        "Problem during backup -> " + t.getClass().getName() + ": " + t.getMessage());
+                            }
+                        }
+                    })
             ;
             OperationAccessor.setStartTime(backupOp, getStartTime());
         }
@@ -72,13 +83,13 @@ final class ResponseWithBackup extends AbstractOperation implements BackupOperat
         OperationAccessor.setCallId(response, getCallId());
     }
 
-    public Operation getBackupOp() {
-        return backupOp;
-    }
-
-    public Response getResponse() {
-        return response;
-    }
+//    public Operation getBackupOp() {
+//        return backupOp;
+//    }
+//
+//    public Response getResponse() {
+//        return response;
+//    }
 
     //    public void beforeRun() throws Exception {
 //        final NodeEngine nodeEngine = getNodeEngine();
@@ -99,13 +110,13 @@ final class ResponseWithBackup extends AbstractOperation implements BackupOperat
 //    }
 
 
-    public void beforeRun() throws Exception {
-        throw new UnsupportedOperationException();
-    }
+//    public void beforeRun() throws Exception {
+//        throw new UnsupportedOperationException();
+//    }
 
     public void run() throws Exception {
-        throw new UnsupportedOperationException();
-//        if (backupOp != null) {
+//        throw new UnsupportedOperationException();
+        if (backupOp != null) {
 //            try {
 //                backupOp.beforeRun();
 //                backupOp.run();
@@ -113,27 +124,29 @@ final class ResponseWithBackup extends AbstractOperation implements BackupOperat
 //            } catch (Throwable e) {
 //                getLogger().log(Level.WARNING, "While executing backup operation within ResponseWithBackup: " + e.getMessage(), e);
 //            }
-//        }
-//        try {
-//            response.beforeRun();
-//            response.run();
-//            response.afterRun();
-//        } catch (Throwable e) {
-//            getLogger().log(Level.SEVERE, "While processing response...", e);
-//        }
+            final NodeEngineImpl nodeEngine = (NodeEngineImpl) getNodeEngine();
+            nodeEngine.operationService.runBackup(backupOp);
+        }
+        try {
+            response.beforeRun();
+            response.run();
+            response.afterRun();
+        } catch (Throwable e) {
+            getLogger().log(Level.SEVERE, "While processing response...", e);
+        }
     }
 
     private ILogger getLogger() {
         return getNodeEngine().getLogger(getClass());
     }
 
-    public void afterRun() throws Exception {
-        throw new UnsupportedOperationException();
-    }
+//    public void afterRun() throws Exception {
+//        throw new UnsupportedOperationException();
+//    }
 
-    public int getKeyHash() {
-        return keyHash;
-    }
+//    public int getKeyHash() {
+//        return keyHash;
+//    }
 
     @Override
     public boolean returnsResponse() {

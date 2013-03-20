@@ -86,7 +86,7 @@ final class OperationServiceImpl implements OperationService {
             }
         });
 
-        backupExecutors = new Executor[3];
+        backupExecutors = new Executor[1];
         for (int i = 0; i < backupExecutors.length; i++) {
             final int id = i;
             backupExecutors[i] = Executors.newSingleThreadExecutor(new ExecutorThreadFactory(node.threadGroup, node.getConfig().getClassLoader()) {
@@ -293,7 +293,7 @@ final class OperationServiceImpl implements OperationService {
         }
     }
 
-    private void runBackup(Operation op) {
+    void runBackup(Operation op) {
         final ThreadContext threadContext = ThreadContext.getOrCreate();
         SpinLock partitionLock = null;
         try {
@@ -327,10 +327,7 @@ final class OperationServiceImpl implements OperationService {
             sendResponse(op, null);
             op.afterRun();
         } catch (Throwable e) {
-//            handleOperationError(op, e);
-            if (node.isActive()) {
-                sendResponse(op, e);
-            }
+            handleOperationError(op, e);
         } finally {
             if (partitionLock != null) {
                 partitionLock.unlock();
@@ -612,7 +609,7 @@ final class OperationServiceImpl implements OperationService {
         Packet packet = new Packet(opData, nodeEngine.getSerializationContext());
         if (op instanceof BackupOperation ){
             packet.setHeader(Packet.HEADER_BACKUP, true);
-            packet.setSomeHash(op instanceof KeyBasedOperation ? ((KeyBasedOperation) op).getKeyHash() : 0);
+//            packet.setSomeHash(op instanceof KeyBasedOperation ? ((KeyBasedOperation) op).getKeyHash() : 0);
         }
         packet.setHeader(Packet.HEADER_OP, true);
         return nodeEngine.send(packet, connection);
@@ -761,15 +758,15 @@ final class OperationServiceImpl implements OperationService {
                 final Operation op = (Operation) nodeEngine.toObject(data);
                 op.setNodeEngine(nodeEngine).setCallerAddress(caller);
                 op.setConnection(conn);
-                if (op instanceof ResponseWithBackup) {
-                    ResponseWithBackup rwb = (ResponseWithBackup) op;
-                    rwb.prepare();
-                    runBackup(rwb.getBackupOp());
-                    processResponse(rwb.getResponse());
-                } else {
+//                if (op instanceof ResponseWithBackup) {
+//                    ResponseWithBackup rwb = (ResponseWithBackup) op;
+//                    rwb.prepare();
+//                    runBackup(rwb.getBackupOp());
+//                    processResponse(rwb.getResponse());
+//                } else {
                     ResponseHandlerFactory.setRemoteResponseHandler(nodeEngine, op);
                     runBackup(op);
-                }
+//                }
             } catch (Throwable e) {
                 logger.log(Level.SEVERE, e.getMessage(), e);
             }
