@@ -220,9 +220,11 @@ abstract class InvocationImpl implements Future, Invocation {
             final long pollTimeout = Math.min(maxCallTimeout, timeout);
             final long start = Clock.currentTimeMillis();
             final Object response;
+            final long lastPollTime;
             try {
                 response = responseQ.poll(pollTimeout, TimeUnit.MILLISECONDS);
-                timeout = decrementTimeout(timeout, Clock.currentTimeMillis() - start);
+                lastPollTime = Clock.currentTimeMillis() - start;
+                timeout = decrementTimeout(timeout, lastPollTime);
             } catch (InterruptedException e) {
                 // do not allow interruption while waiting for a response!
                 logger.log(Level.FINEST, Thread.currentThread().getName() + " is interrupted while waiting " +
@@ -274,7 +276,7 @@ abstract class InvocationImpl implements Future, Invocation {
                     continue;
                 }
                 // TODO: @mm - improve logging (see SystemLogService)
-                logger.log(Level.WARNING, "No response for " + pollTimeout + " ms. " + toString());
+                logger.log(Level.WARNING, "No response for " + lastPollTime + " ms. " + toString());
 
                 boolean executing = isOperationExecuting(target);
                 if (!executing) {
@@ -427,19 +429,6 @@ abstract class InvocationImpl implements Future, Invocation {
         this.callback = callback;
     }
 
-    @Override
-    public String toString() {
-        return "InvocationImpl{" +
-                "serviceName='" + serviceName + '\'' +
-                ", op=" + op +
-                ", partitionId=" + partitionId +
-                ", replicaIndex=" + replicaIndex +
-                ", invokeCount=" + invokeCount +
-                ", tryCount=" + tryCount +
-                ", callTimeout=" + callTimeout +
-                '}';
-    }
-
     public static class IsStillExecuting extends AbstractOperation {
 
         private long operationCallId;
@@ -481,5 +470,23 @@ abstract class InvocationImpl implements Future, Invocation {
     private static boolean isJoinOperation(Operation op) {
         return op instanceof JoinOperation
                 && op.getClass().getClassLoader() == thisClassLoader;
+    }
+
+
+    @Override
+    public String toString() {
+        final StringBuilder sb = new StringBuilder();
+        sb.append("InvocationImpl");
+        sb.append("{ serviceName='").append(serviceName).append('\'');
+        sb.append(", op=").append(op);
+        sb.append(", partitionId=").append(partitionId);
+        sb.append(", replicaIndex=").append(replicaIndex);
+        sb.append(", tryCount=").append(tryCount);
+        sb.append(", tryPauseMillis=").append(tryPauseMillis);
+        sb.append(", invokeCount=").append(invokeCount);
+        sb.append(", callTimeout=").append(callTimeout);
+        sb.append(", remote=").append(remote);
+        sb.append('}');
+        return sb.toString();
     }
 }

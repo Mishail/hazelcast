@@ -58,7 +58,8 @@ final class ResponseWithBackup extends AbstractOperation implements BackupOperat
             backupOp.setNodeEngine(nodeEngine)
                     .setCallerAddress(getCallerAddress())
                     .setCallerUuid(getCallerUuid())
-                    .setConnection(getConnection());
+                    .setConnection(getConnection())
+                    .setResponseHandler(ResponseHandlerFactory.createEmptyResponseHandler());
             OperationAccessor.setStartTime(backupOp, getStartTime());
         }
 
