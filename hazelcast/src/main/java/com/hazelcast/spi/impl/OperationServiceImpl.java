@@ -57,7 +57,7 @@ final class OperationServiceImpl implements OperationService {
     private final Node node;
     private final ILogger logger;
     private final AtomicLong localIdGen = new AtomicLong();
-    private final ConcurrentMap<Long, Call> mapCalls = new ConcurrentHashMap<Long, Call>(1000);
+    private final ConcurrentMap<Long, Call> mapCalls;
     private final Lock[] ownerLocks;
     private final Lock[] backupLocks;
     private final SpinReadWriteLock[] partitionLocks;
@@ -71,6 +71,7 @@ final class OperationServiceImpl implements OperationService {
         this.logger = node.getLogger(OperationService.class.getName());
         defaultCallTimeout = node.getGroupProperties().OPERATION_CALL_TIMEOUT_MILLIS.getLong();
         final int coreSize = Runtime.getRuntime().availableProcessors();
+        mapCalls = new ConcurrentHashMap<Long, Call>(1000, 0.75f, (coreSize > 8 ? coreSize * 4 : 16));
         final String poolNamePrefix = node.getThreadPoolNamePrefix("operation");
         executor = new FastExecutor(coreSize, poolNamePrefix,
                 new PoolExecutorThreadFactory(node.threadGroup, poolNamePrefix, node.getConfig().getClassLoader()));
@@ -111,14 +112,14 @@ final class OperationServiceImpl implements OperationService {
 
     @PrivateApi
     void handleOperation(final Packet packet) {
-//        try {
-//            executor.execute(new RemoteOperationProcessor(packet));
-//        } catch (RejectedExecutionException e) {
-//            if (nodeEngine.isActive()) {
-//                throw e;
-//            }
-//        }
-        new RemoteOperationProcessor(packet).run();
+        try {
+            executor.execute(new RemoteOperationProcessor(packet));
+        } catch (RejectedExecutionException e) {
+            if (nodeEngine.isActive()) {
+                throw e;
+            }
+        }
+//        new RemoteOperationProcessor(packet).run();
     }
 
     /**
