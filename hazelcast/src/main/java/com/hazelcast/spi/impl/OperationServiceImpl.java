@@ -111,13 +111,14 @@ final class OperationServiceImpl implements OperationService {
 
     @PrivateApi
     void handleOperation(final Packet packet) {
-        try {
-            executor.execute(new RemoteOperationProcessor(packet));
-        } catch (RejectedExecutionException e) {
-            if (nodeEngine.isActive()) {
-                throw e;
-            }
-        }
+//        try {
+//            executor.execute(new RemoteOperationProcessor(packet));
+//        } catch (RejectedExecutionException e) {
+//            if (nodeEngine.isActive()) {
+//                throw e;
+//            }
+//        }
+        new RemoteOperationProcessor(packet).run();
     }
 
     /**
