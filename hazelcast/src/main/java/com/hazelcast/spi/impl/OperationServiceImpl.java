@@ -57,7 +57,7 @@ final class OperationServiceImpl implements OperationService {
     private final Node node;
     private final ILogger logger;
     private final AtomicLong localIdGen = new AtomicLong();
-    private final ConcurrentMap<Long, Call> mapCalls = new ConcurrentHashMap<Long, Call>(1000);
+    private final ConcurrentMap<Long, Call> mapCalls = new ConcurrentHashMap<Long, Call>(1000, 0.75f, 128);
     private final Lock[] ownerLocks;
     private final Lock[] backupLocks;
     private final SpinReadWriteLock[] partitionLocks;
