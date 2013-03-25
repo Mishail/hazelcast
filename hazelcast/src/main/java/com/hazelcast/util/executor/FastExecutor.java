@@ -20,8 +20,10 @@ import com.hazelcast.util.Clock;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Queue;
 import java.util.concurrent.*;
 import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.LockSupport;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
@@ -29,7 +31,8 @@ import java.util.concurrent.locks.ReentrantLock;
  */
 public class FastExecutor implements Executor {
 
-    private final BlockingQueue<WorkerTask> queue;
+//    private final BlockingQueue<WorkerTask> queue;
+    private final Queue<WorkerTask> queue;
     private final Collection<Thread> threads = Collections.newSetFromMap(new ConcurrentHashMap<Thread, Boolean>());
     private final ThreadFactory threadFactory;
     private final int coreThreadSize;
@@ -57,7 +60,8 @@ public class FastExecutor implements Executor {
         this.maxThreadSize = maxThreadSize;
         this.backlogInterval = backlogIntervalInMillis;
         this.allowCoreThreadTimeout = allowCoreThreadTimeout;
-        this.queue = new LinkedBlockingQueue<WorkerTask>(queueCapacity);
+//        this.queue = new LinkedBlockingQueue<WorkerTask>(queueCapacity);
+        this.queue = new ConcurrentLinkedQueue<WorkerTask>();
 
         Thread t = new Thread(new BacklogDetector(), namePrefix + "backlog");
         threads.add(t);
@@ -71,13 +75,13 @@ public class FastExecutor implements Executor {
 
     public void execute(Runnable command) {
         if (!live) throw new RejectedExecutionException("Executor has been shutdown!");
-        try {
-            if (!queue.offer(new WorkerTask(command), backlogInterval, TimeUnit.MILLISECONDS)) {
+//        try {
+            if (!queue.offer(new WorkerTask(command)/*, backlogInterval, TimeUnit.MILLISECONDS*/)) {
                 throw new RejectedExecutionException("Executor reached to max capacity!");
             }
-        } catch (InterruptedException e) {
-            throw new RejectedExecutionException(e);
-        }
+//        } catch (InterruptedException e) {
+//            throw new RejectedExecutionException(e);
+//        }
     }
 
     public void start() {
@@ -117,28 +121,31 @@ public class FastExecutor implements Executor {
             final Thread currentThread = Thread.currentThread();
             final boolean take = keepAliveMillis <= 0 || keepAliveMillis == Long.MAX_VALUE;
             final long timeout = keepAliveMillis;
+            final long spin = TimeUnit.MICROSECONDS.toNanos(25);
             while (!currentThread.isInterrupted() && live) {
                 try {
-                    final WorkerTask task = take ? queue.take() : queue.poll(timeout, TimeUnit.MILLISECONDS);
+//                    final WorkerTask task = take ? queue.take() : queue.poll(timeout, TimeUnit.MILLISECONDS);
+                    final WorkerTask task = queue.poll();
                     if (task != null) {
                         task.run();
                     } else {
-                        lock.lockInterruptibly();
-                        try {
-                            if (activeThreadCount > coreThreadSize || allowCoreThreadTimeout) {
-                                threads.remove(currentThread);
-                                activeThreadCount--;
-                                final WorkerLifecycleInterceptor workerInterceptor = interceptor;
-                                if (workerInterceptor != null) {
-                                    workerInterceptor.afterWorkerTerminate();
-                                }
-                                return;
-                            }
-                        } finally {
-                            lock.unlock();
-                        }
+//                        lock.lockInterruptibly();
+//                        try {
+//                            if (activeThreadCount > coreThreadSize || allowCoreThreadTimeout) {
+//                                threads.remove(currentThread);
+//                                activeThreadCount--;
+//                                final WorkerLifecycleInterceptor workerInterceptor = interceptor;
+//                                if (workerInterceptor != null) {
+//                                    workerInterceptor.afterWorkerTerminate();
+//                                }
+//                                return;
+//                            }
+//                        } finally {
+//                            lock.unlock();
+//                        }
+                        LockSupport.parkNanos(spin);
                     }
-                } catch (InterruptedException e) {
+                } catch (/*Interrupted*/Exception e) {
                     break;
                 }
             }
