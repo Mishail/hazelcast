@@ -40,11 +40,11 @@ public class Main {
         config.getServicesConfig().addServiceConfig(
                 new ServiceConfig().setName(TestService.NAME).setServiceImpl(new TestService()).setEnabled(true));
 
-        final HazelcastInstance hz = Hazelcast.newHazelcastInstance(config);
-        Hazelcast.newHazelcastInstance(config);
-
-//        final HazelcastInstance[] instances = StaticNodeFactory.newInstances(config, 2);
-//        final HazelcastInstance hz = instances[0];
+//        final HazelcastInstance hz = Hazelcast.newHazelcastInstance(config);
+//        Hazelcast.newHazelcastInstance(config);
+//
+        final HazelcastInstance[] instances = StaticNodeFactory.newInstances(config, 2);
+        final HazelcastInstance hz = instances[0];
 
         final TestObject test = hz.getDistributedObject(TestService.NAME, "");
         final AtomicInteger count = new AtomicInteger();
