@@ -20,6 +20,7 @@ import com.hazelcast.config.Config;
 import com.hazelcast.config.ServiceConfig;
 import com.hazelcast.config.XmlConfigBuilder;
 import com.hazelcast.core.DistributedObject;
+import com.hazelcast.core.Hazelcast;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.nio.serialization.IdentifiedDataSerializable;
 import com.hazelcast.spi.*;
@@ -39,11 +40,11 @@ public class Main {
         config.getServicesConfig().addServiceConfig(
                 new ServiceConfig().setName(TestService.NAME).setServiceImpl(new TestService()).setEnabled(true));
 
-//        final HazelcastInstance hz = Hazelcast.newHazelcastInstance(config);
+        final HazelcastInstance hz = Hazelcast.newHazelcastInstance(config);
 //        Hazelcast.newHazelcastInstance(config);
 //
-        final HazelcastInstance[] instances = StaticNodeFactory.newInstances(config, 2);
-        final HazelcastInstance hz = instances[0];
+//        final HazelcastInstance[] instances = StaticNodeFactory.newInstances(config, 2);
+//        final HazelcastInstance hz = instances[0];
 
         final TestObject test = hz.getDistributedObject(TestService.NAME, "");
         final AtomicInteger count = new AtomicInteger();
