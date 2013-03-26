@@ -85,7 +85,7 @@ public class SpinningFastExecutor implements FastExecutor {
         if (!queue.offer(new WorkerTask(command)/*, backlogInterval, TimeUnit.MILLISECONDS*/)) {
             throw new RejectedExecutionException("Executor reached to max capacity!");
         }
-        if (running.get() < coreThreadSize) {
+        if (running.get() < activeThreadCount) {
             lock.lock();
             try {
                 signalWorker.signal();
