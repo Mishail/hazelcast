@@ -25,7 +25,6 @@ import com.hazelcast.nio.serialization.IdentifiedDataSerializable;
 import com.hazelcast.spi.*;
 
 import java.util.Properties;
-import java.util.Random;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -62,17 +61,17 @@ public class Main {
             }
         }.start();
 
-        for (int i = 0; i < 100; i++) {
-            new Thread() {
-                public void run() {
-                    Random rand = new Random();
-                    while (true) {
-                        test.process(rand.nextInt(100000));
-                        count.incrementAndGet();
-                    }
-                }
-            }.start();
-        }
+//        for (int i = 0; i < 100; i++) {
+//            new Thread() {
+//                public void run() {
+//                    Random rand = new Random();
+//                    while (true) {
+//                        test.process(rand.nextInt(100000));
+//                        count.incrementAndGet();
+//                    }
+//                }
+//            }.start();
+//        }
     }
 
     static class TestObject extends AbstractDistributedObject<TestService> {
