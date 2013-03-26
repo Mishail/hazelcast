@@ -124,7 +124,7 @@ public class FastExecutorImpl2 implements FastExecutor {
         public void run() {
             final Thread currentThread = Thread.currentThread();
             final long timeout = keepAliveMillis;
-            final int spin = 100;
+            final int spin = 1000;
 //            final int park = 1000;
 //            final int sleep = 10000;
             WorkerTask task = null;
@@ -133,7 +133,7 @@ loop:       while (!currentThread.isInterrupted() && live) {
                     task.run();
                 }
 
-                int spinCounter = 100;
+                int spinCounter = spin;
                 while (spinCounter > 0) {
                     task = queue.poll();
                     if (task != null) {
@@ -146,7 +146,7 @@ loop:       while (!currentThread.isInterrupted() && live) {
                         spinCounter--;
                     }
                 }
-                int parkCounter = 1000;
+                int parkCounter = 10000;
                 while (parkCounter > 0) {
                     task = queue.poll();
                     if (task != null) {
@@ -159,20 +159,20 @@ loop:       while (!currentThread.isInterrupted() && live) {
                         parkCounter--;
                     }
                 }
-                int sleepCounter = 10000;
-                while (sleepCounter > 0) {
-                    task = queue.poll();
-                    if (task != null) {
-                        continue loop;
-                    } else {
-                        try {
-                            Thread.sleep(1);
-                        } catch (InterruptedException e) {
-                            return;
-                        }
-                        sleepCounter--;
-                    }
-                }
+//                int sleepCounter = 10000;
+//                while (sleepCounter > 0) {
+//                    task = queue.poll();
+//                    if (task != null) {
+//                        continue loop;
+//                    } else {
+//                        try {
+//                            Thread.sleep(1);
+//                        } catch (InterruptedException e) {
+//                            return;
+//                        }
+//                        sleepCounter--;
+//                    }
+//                }
 //                int parkCounter = 1000;
 //                while (parkCounter > 0) {
 //                    task = queue.poll();
@@ -257,7 +257,7 @@ loop:       while (!currentThread.isInterrupted() && live) {
                         }
                         try {
                             System.err.println("DEBUG: Signalling a worker thread!");
-                            signalWorker.signalAll();
+                            signalWorker.signal();
                         } finally {
                             lock.unlock();
                         }

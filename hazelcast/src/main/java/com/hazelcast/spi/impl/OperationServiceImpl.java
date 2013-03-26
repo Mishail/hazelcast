@@ -73,10 +73,12 @@ final class OperationServiceImpl implements OperationService {
         this.logger = node.getLogger(OperationService.class.getName());
         defaultCallTimeout = node.getGroupProperties().OPERATION_CALL_TIMEOUT_MILLIS.getLong();
         final int coreSize = Runtime.getRuntime().availableProcessors();
-        mapCalls = new ConcurrentHashMap<Long, Call>(1000, 0.75f, (coreSize > 8 ? coreSize * 4 : 16));
+        final boolean multiCore = coreSize >= 8;
+        mapCalls = new ConcurrentHashMap<Long, Call>(1000, 0.75f, (multiCore ? coreSize * 4 : 16));
         final String poolNamePrefix = node.getThreadPoolNamePrefix("operation");
-        executor = new FastExecutorImpl2(coreSize, poolNamePrefix,
-                new PoolExecutorThreadFactory(node.threadGroup, poolNamePrefix, node.getConfig().getClassLoader()));
+        final ThreadFactory threadFactory = new PoolExecutorThreadFactory(node.threadGroup, poolNamePrefix, node.getConfig().getClassLoader());
+        executor = multiCore ? new FastExecutorImpl2(coreSize, poolNamePrefix, threadFactory)
+                : new FastExecutorImpl(coreSize, poolNamePrefix, threadFactory);
         executor.setInterceptor(new FastExecutorImpl.WorkerLifecycleInterceptor() {
             public void beforeWorkerStart() {
                 logger.log(Level.INFO, "Creating a new operation thread -> Core: " + executor.getCoreThreadSize()
