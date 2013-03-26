@@ -22,6 +22,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Queue;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.LockSupport;
@@ -44,6 +45,7 @@ public class FastExecutorImpl2 implements FastExecutor {
     private final boolean allowCoreThreadTimeout;
     private final Lock lock = new ReentrantLock();
     private final Condition signalWorker = lock.newCondition();
+    private final AtomicInteger running = new AtomicInteger();
 
     private volatile WorkerLifecycleInterceptor interceptor;
     private volatile int activeThreadCount;
@@ -82,6 +84,14 @@ public class FastExecutorImpl2 implements FastExecutor {
 //        try {
         if (!queue.offer(new WorkerTask(command)/*, backlogInterval, TimeUnit.MILLISECONDS*/)) {
             throw new RejectedExecutionException("Executor reached to max capacity!");
+        }
+        if (running.get() < coreThreadSize) {
+            lock.lock();
+            try {
+                signalWorker.signal();
+            } finally {
+                lock.unlock();
+            }
         }
 //        } catch (InterruptedException e) {
 //            throw new RejectedExecutionException(e);
@@ -129,6 +139,7 @@ public class FastExecutorImpl2 implements FastExecutor {
 //            final int sleep = 10000;
             WorkerTask task = null;
 loop:       while (!currentThread.isInterrupted() && live) {
+                running.incrementAndGet();
                 if (task != null) {
                     task.run();
                 }
@@ -206,6 +217,7 @@ loop:       while (!currentThread.isInterrupted() && live) {
                 try {
                     lock.lockInterruptibly();
                     try {
+                        running.decrementAndGet();
                         signalWorker.await(timeout, TimeUnit.MILLISECONDS);
                         task = queue.poll();
                         System.err.println("DEBUG: Awaken from sleep -> " + currentThread.getName() + " TASK: " + task);
