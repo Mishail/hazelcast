@@ -134,85 +134,29 @@ public class FastExecutorImpl2 implements FastExecutor {
         public void run() {
             final Thread currentThread = Thread.currentThread();
             final long timeout = keepAliveMillis;
-            final int spin = 1000;
-//            final int park = 1000;
-//            final int sleep = 10000;
+            final int longPark = 5000;
+            final int park = longPark + 10000;
+            final int spin = park + 1000;
             WorkerTask task = null;
-loop:       while (!currentThread.isInterrupted() && live) {
+            while (!currentThread.isInterrupted() && live) {
                 running.incrementAndGet();
-                if (task != null) {
-                    task.run();
-                }
-
-                int spinCounter = spin;
-                while (spinCounter > 0) {
+                int c = spin;
+                while (c > 0) {
                     task = queue.poll();
                     if (task != null) {
                         task.run();
-                        spinCounter = spin;
+                        c = spin;
                     } else {
                         if (currentThread.isInterrupted()) {
                             return;
                         }
-                        spinCounter--;
-                    }
-                }
-                int parkCounter = 10000;
-                while (parkCounter > 0) {
-                    task = queue.poll();
-                    if (task != null) {
-                        continue loop;
-                    } else {
-                        if (currentThread.isInterrupted()) {
-                            return;
+                        if (c-- < longPark) {
+                            LockSupport.parkNanos(100L);
+                        } else if (c-- < park) {
+                            LockSupport.parkNanos(1L);
                         }
-                        LockSupport.parkNanos(1L);
-                        parkCounter--;
                     }
                 }
-//                int sleepCounter = 10000;
-//                while (sleepCounter > 0) {
-//                    task = queue.poll();
-//                    if (task != null) {
-//                        continue loop;
-//                    } else {
-//                        try {
-//                            Thread.sleep(1);
-//                        } catch (InterruptedException e) {
-//                            return;
-//                        }
-//                        sleepCounter--;
-//                    }
-//                }
-//                int parkCounter = 1000;
-//                while (parkCounter > 0) {
-//                    task = queue.poll();
-//                    if (task != null) {
-//                        task.run();
-//                        parkCounter = park;
-//                    } else {
-//                        if (currentThread.isInterrupted()) {
-//                            return;
-//                        }
-//                        LockSupport.parkNanos(1L);
-//                        parkCounter--;
-//                    }
-//                }
-//                int sleepCounter = 10000;
-//                while (sleepCounter > 0) {
-//                    task = queue.poll();
-//                    if (task != null) {
-//                        task.run();
-//                        sleepCounter = sleep;
-//                    } else {
-//                        try {
-//                            Thread.sleep(1);
-//                        } catch (InterruptedException e) {
-//                            return;
-//                        }
-//                        sleepCounter--;
-//                    }
-//                }
 
                 try {
                     lock.lockInterruptibly();
@@ -237,6 +181,10 @@ loop:       while (!currentThread.isInterrupted() && live) {
                     }
                 } catch (InterruptedException e) {
                     break;
+                }
+
+                if (task != null) { // task polled after await!
+                    task.run();
                 }
             }
         }
