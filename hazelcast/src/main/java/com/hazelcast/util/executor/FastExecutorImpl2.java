@@ -134,8 +134,7 @@ public class FastExecutorImpl2 implements FastExecutor {
         public void run() {
             final Thread currentThread = Thread.currentThread();
             final long timeout = keepAliveMillis;
-            final int longPark = 5000;
-            final int park = longPark + 10000;
+            final int park = 100000;
             final int spin = park + 1000;
             WorkerTask task = null;
             while (!currentThread.isInterrupted() && live) {
@@ -150,10 +149,8 @@ public class FastExecutorImpl2 implements FastExecutor {
                         if (currentThread.isInterrupted()) {
                             return;
                         }
-                        if (c-- < longPark) {
-                            LockSupport.parkNanos(100L);
-                        } else if (c-- < park) {
-                            LockSupport.parkNanos(1L);
+                        if (c-- < park) {
+                            LockSupport.parkNanos(10L);
                         }
                     }
                 }
