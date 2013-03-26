@@ -64,7 +64,7 @@ public class Main {
         }.start();
 
         final int coreSize = Runtime.getRuntime().availableProcessors();
-        for (int i = 0; i < coreSize * 10; i++) {
+        for (int i = 0; i < coreSize * 20; i++) {
             new Thread() {
                 public void run() {
                     Random rand = new Random();
