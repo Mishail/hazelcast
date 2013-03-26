@@ -28,7 +28,7 @@ import com.hazelcast.spi.ClientProtocolService;
 import com.hazelcast.spi.Connection;
 import com.hazelcast.spi.Invocation;
 import com.hazelcast.spi.impl.ResponseHandlerFactory;
-import com.hazelcast.util.executor.FastExecutor;
+import com.hazelcast.util.executor.FastExecutorImpl;
 import com.hazelcast.util.executor.PoolExecutorThreadFactory;
 import com.hazelcast.util.UuidUtil;
 
@@ -45,14 +45,14 @@ public class ClientCommandService implements ConnectionListener {
     private final Map<TcpIpConnection, ClientEndpoint> mapClientEndpoints = new ConcurrentHashMap<TcpIpConnection, ClientEndpoint>();
     private final ConcurrentHashMap<Command, ClientCommandHandler> services;
     private final ClientCommandHandler unknownCommandHandler;
-    private final FastExecutor executor;
+    private final FastExecutorImpl executor;
     private volatile boolean started = false;
 
     public ClientCommandService(Node node) {
         this.node = node;
         logger = node.getLogger(ClientCommandService.class.getName());
         final String poolNamePrefix = node.getThreadPoolNamePrefix("client");
-        executor = new FastExecutor(3, 100, 1 << 16, 250L, poolNamePrefix,
+        executor = new FastExecutorImpl(3, 100, 1 << 16, 250L, poolNamePrefix,
                 new PoolExecutorThreadFactory(node.threadGroup, poolNamePrefix, node.getConfig().getClassLoader()),
                 TimeUnit.SECONDS.toMillis(30), true, false);
         node.getConnectionManager().addConnectionListener(this);
