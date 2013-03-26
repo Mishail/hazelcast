@@ -190,7 +190,8 @@ public class FastExecutorImpl2 implements FastExecutor {
     private class BacklogDetector implements Runnable {
 
         public void run() {
-            long currentBacklogInterval = backlogInterval;
+            final long currentBacklogInterval = backlogInterval;
+            final long signalInterval = Math.max(currentBacklogInterval / 5, 100);
             final Thread thread = Thread.currentThread();
             int k = 0;
             while (!thread.isInterrupted() && live) {
@@ -206,7 +207,7 @@ public class FastExecutorImpl2 implements FastExecutor {
                             }
                             addWorker(true);
                         }
-                    } else if (task.creationTime + 50 < now) {
+                    } else if (task.creationTime + signalInterval < now) {
                         try {
                             lock.lockInterruptibly();
                         } catch (InterruptedException e) {

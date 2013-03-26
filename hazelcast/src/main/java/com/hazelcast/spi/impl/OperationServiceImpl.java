@@ -77,7 +77,7 @@ final class OperationServiceImpl implements OperationService {
         mapCalls = new ConcurrentHashMap<Long, Call>(1000, 0.75f, (reallyMultiCore ? coreSize * 4 : 16));
         final String poolNamePrefix = node.getThreadPoolNamePrefix("operation");
         final ThreadFactory threadFactory = new PoolExecutorThreadFactory(node.threadGroup, poolNamePrefix, node.getConfig().getClassLoader());
-        executor = reallyMultiCore ? new FastExecutorImpl2(coreSize, poolNamePrefix, threadFactory)
+        executor = reallyMultiCore ? new FastExecutorImpl(coreSize, poolNamePrefix, threadFactory)
                 : new FastExecutorImpl(coreSize, poolNamePrefix, threadFactory);
         executor.setInterceptor(new FastExecutorImpl.WorkerLifecycleInterceptor() {
             public void beforeWorkerStart() {
