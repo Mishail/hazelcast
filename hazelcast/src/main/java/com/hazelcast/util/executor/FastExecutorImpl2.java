@@ -64,8 +64,8 @@ public class FastExecutorImpl2 implements FastExecutor {
         this.maxThreadSize = maxThreadSize;
         this.backlogInterval = backlogIntervalInMillis;
         this.allowCoreThreadTimeout = allowCoreThreadTimeout;
-        this.queue = new LinkedBlockingQueue<WorkerTask>(queueCapacity);
-//        this.queue = new ConcurrentLinkedQueue<WorkerTask>();
+//        this.queue = new LinkedBlockingQueue<WorkerTask>(queueCapacity);
+        this.queue = new ConcurrentLinkedQueue<WorkerTask>();
 
         Thread t = new Thread(new BacklogDetector(), namePrefix + "backlog");
         threads.add(t);
