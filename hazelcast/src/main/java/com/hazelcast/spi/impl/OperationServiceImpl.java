@@ -38,9 +38,9 @@ import com.hazelcast.util.Clock;
 import com.hazelcast.util.ExceptionUtil;
 import com.hazelcast.util.SpinLock;
 import com.hazelcast.util.SpinReadWriteLock;
+import com.hazelcast.util.executor.BlockingFastExecutor;
 import com.hazelcast.util.executor.FastExecutor;
-import com.hazelcast.util.executor.FastExecutorImpl;
-import com.hazelcast.util.executor.FastExecutorImpl2;
+import com.hazelcast.util.executor.SpinningFastExecutor;
 import com.hazelcast.util.executor.PoolExecutorThreadFactory;
 
 import java.util.*;
@@ -77,9 +77,9 @@ final class OperationServiceImpl implements OperationService {
         mapCalls = new ConcurrentHashMap<Long, Call>(1000, 0.75f, (reallyMultiCore ? coreSize * 4 : 16));
         final String poolNamePrefix = node.getThreadPoolNamePrefix("operation");
         final ThreadFactory threadFactory = new PoolExecutorThreadFactory(node.threadGroup, poolNamePrefix, node.getConfig().getClassLoader());
-        executor = reallyMultiCore ? new FastExecutorImpl2(coreSize, poolNamePrefix, threadFactory)
-                : new FastExecutorImpl(coreSize, poolNamePrefix, threadFactory);
-        executor.setInterceptor(new FastExecutorImpl.WorkerLifecycleInterceptor() {
+        executor = reallyMultiCore ? new SpinningFastExecutor(coreSize, poolNamePrefix, threadFactory)
+                : new BlockingFastExecutor(coreSize, poolNamePrefix, threadFactory);
+        executor.setInterceptor(new BlockingFastExecutor.WorkerLifecycleInterceptor() {
             public void beforeWorkerStart() {
                 logger.log(Level.INFO, "Creating a new operation thread -> Core: " + executor.getCoreThreadSize()
                     + ", Current: " + (executor.getActiveThreadCount() + 1) + ", Max: " + executor.getMaxThreadSize());
