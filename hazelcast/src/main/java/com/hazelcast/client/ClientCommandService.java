@@ -25,7 +25,7 @@ import com.hazelcast.nio.Protocol;
 import com.hazelcast.nio.TcpIpConnection;
 import com.hazelcast.nio.protocol.Command;
 import com.hazelcast.spi.ClientProtocolService;
-import com.hazelcast.spi.Connection;
+import com.hazelcast.nio.Connection;
 import com.hazelcast.spi.Invocation;
 import com.hazelcast.spi.impl.ResponseHandlerFactory;
 import com.hazelcast.util.executor.BlockingFastExecutor;

@@ -33,10 +33,8 @@ import java.util.concurrent.locks.ReentrantLock;
  */
 public class SpinningFastExecutor implements FastExecutor {
 
-    //    private final BlockingQueue<WorkerTask> queue;
     private final Queue<WorkerTask> queue;
     private final Collection<Thread> threads = Collections.newSetFromMap(new ConcurrentHashMap<Thread, Boolean>());
-    private final int queueCapacity;
     private final ThreadFactory threadFactory;
     private final int coreThreadSize;
     private final int maxThreadSize;
@@ -45,7 +43,7 @@ public class SpinningFastExecutor implements FastExecutor {
     private final boolean allowCoreThreadTimeout;
     private final Lock lock = new ReentrantLock();
     private final Condition signalWorker = lock.newCondition();
-    private final AtomicInteger running = new AtomicInteger();
+    private final AtomicInteger spinningThreads = new AtomicInteger();
 
     private volatile WorkerLifecycleInterceptor interceptor;
     private volatile int activeThreadCount;
@@ -59,15 +57,13 @@ public class SpinningFastExecutor implements FastExecutor {
     public SpinningFastExecutor(int coreThreadSize, int maxThreadSize, int queueCapacity,
                                 long backlogIntervalInMillis, String namePrefix, ThreadFactory threadFactory,
                                 long keepAliveMillis, boolean allowCoreThreadTimeout, boolean startCoreThreads) {
-        this.queueCapacity = queueCapacity;
         this.threadFactory = threadFactory;
         this.keepAliveMillis = keepAliveMillis;
         this.coreThreadSize = coreThreadSize;
         this.maxThreadSize = maxThreadSize;
         this.backlogInterval = backlogIntervalInMillis;
         this.allowCoreThreadTimeout = allowCoreThreadTimeout;
-//        this.queue = new LinkedBlockingQueue<WorkerTask>(queueCapacity);
-        this.queue = new ConcurrentLinkedQueue<WorkerTask>();
+        this.queue = new ConcurrentLinkedQueue<WorkerTask>();  // TODO: @mm - capacity check!
 
         Thread t = new Thread(new BacklogDetector(), namePrefix + "backlog");
         threads.add(t);
@@ -81,11 +77,10 @@ public class SpinningFastExecutor implements FastExecutor {
 
     public void execute(Runnable command) {
         if (!live) throw new RejectedExecutionException("Executor has been shutdown!");
-//        try {
-        if (!queue.offer(new WorkerTask(command)/*, backlogInterval, TimeUnit.MILLISECONDS*/)) {
+        if (!queue.offer(new WorkerTask(command))) {
             throw new RejectedExecutionException("Executor reached to max capacity!");
         }
-        if (running.get() < activeThreadCount) {
+        if (spinningThreads.get() < coreThreadSize) {
             lock.lock();
             try {
                 signalWorker.signal();
@@ -93,9 +88,6 @@ public class SpinningFastExecutor implements FastExecutor {
                 lock.unlock();
             }
         }
-//        } catch (InterruptedException e) {
-//            throw new RejectedExecutionException(e);
-//        }
     }
 
     public void start() {
@@ -138,7 +130,7 @@ public class SpinningFastExecutor implements FastExecutor {
             final int spin = park + 1000;
             WorkerTask task = null;
             while (!currentThread.isInterrupted() && live) {
-                running.incrementAndGet();
+                spinningThreads.incrementAndGet();
                 int c = spin;
                 while (c > 0) {
                     task = queue.poll();
@@ -158,7 +150,7 @@ public class SpinningFastExecutor implements FastExecutor {
                 try {
                     lock.lockInterruptibly();
                     try {
-                        running.decrementAndGet();
+                        spinningThreads.decrementAndGet();
                         signalWorker.await(timeout, TimeUnit.MILLISECONDS);
                         task = queue.poll();
                         System.err.println("DEBUG: Awaken from sleep -> " + currentThread.getName() + " TASK: " + task);
@@ -179,7 +171,6 @@ public class SpinningFastExecutor implements FastExecutor {
                 } catch (InterruptedException e) {
                     break;
                 }
-
                 if (task != null) { // task polled after await!
                     task.run();
                 }

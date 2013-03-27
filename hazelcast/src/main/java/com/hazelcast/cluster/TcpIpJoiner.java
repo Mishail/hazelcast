@@ -26,7 +26,7 @@ import com.hazelcast.instance.Node;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.nio.Address;
 import com.hazelcast.spi.AbstractOperation;
-import com.hazelcast.spi.Connection;
+import com.hazelcast.nio.Connection;
 import com.hazelcast.spi.Invocation;
 import com.hazelcast.spi.impl.NodeEngineImpl;
 import com.hazelcast.util.AddressUtil;
