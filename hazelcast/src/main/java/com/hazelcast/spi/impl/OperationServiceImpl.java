@@ -169,7 +169,7 @@ final class OperationServiceImpl implements OperationService {
                     partitionLock.lock();
                 } else {
                     partitionLock = migrationLock.readLock();
-                    if (!partitionLock.tryLock(500, TimeUnit.MILLISECONDS)) {
+                    if (!partitionLock.tryLock(50, TimeUnit.MILLISECONDS)) {
                         partitionLock = null;
                         throw new PartitionMigratingException(node.getThisAddress(), partitionId,
                                 op.getClass().getName(), op.getServiceName());

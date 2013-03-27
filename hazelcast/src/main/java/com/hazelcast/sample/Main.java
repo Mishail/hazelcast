@@ -66,6 +66,7 @@ public class Main {
             }
         }.start();
 
+        final int k = args.length == 0 ? 10 : Integer.parseInt(args[0]);
         final int coreSize = Runtime.getRuntime().availableProcessors();
         for (int i = 0; i < coreSize * 20; i++) {
             new Thread() {
@@ -73,7 +74,7 @@ public class Main {
                     Random rand = new Random();
                     while (true) {
                         // test.process(rand.nextInt(100000));
-                        map.put(rand.nextInt(1000000), new byte[100]);
+                        map.put(rand.nextInt(1000000), new byte[k]);
                         count.incrementAndGet();
                     }
                 }
