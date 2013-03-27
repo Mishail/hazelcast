@@ -50,6 +50,7 @@ public class Main {
 
         final TestObject test = hz.getDistributedObject(TestService.NAME, "");
         final AtomicInteger count = new AtomicInteger();
+        final IMap<Object,Object> map = hz.getMap("test");
 
         new Thread() {
             public void run() {
@@ -60,13 +61,12 @@ public class Main {
                         return;
                     }
                     int k = count.getAndSet(0) / 5;
-                    System.err.println("Current -> " + k);
+                    System.err.println("Current -> " + k + ", SIZE: " + map.size());
                 }
             }
         }.start();
 
         final int coreSize = Runtime.getRuntime().availableProcessors();
-        final IMap<Object,Object> map = hz.getMap("test");
         for (int i = 0; i < coreSize * 20; i++) {
             new Thread() {
                 public void run() {
