@@ -156,17 +156,18 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
     }
 
     private void notifyMasterToAssignPartitions() {
-        lock.lock();
-        try {
-            if (!initialized && !node.isMaster() && node.getMasterAddress() != null && node.joined()) {
-                Future f = nodeEngine.getOperationService().createInvocationBuilder(SERVICE_NAME, new AssignPartitions(),
-                        node.getMasterAddress()).setTryCount(1).build().invoke();
-                f.get(1, TimeUnit.SECONDS);
+        if (lock.tryLock()) {
+            try {
+                if (!initialized && !node.isMaster() && node.getMasterAddress() != null && node.joined()) {
+                    Future f = nodeEngine.getOperationService().createInvocationBuilder(SERVICE_NAME, new AssignPartitions(),
+                            node.getMasterAddress()).setTryCount(1).build().invoke();
+                    f.get(1, TimeUnit.SECONDS);
+                }
+            } catch (Exception e) {
+                logger.log(Level.FINEST, e.getMessage(), e);
+            } finally {
+                lock.unlock();
             }
-        } catch (Exception e) {
-            logger.log(Level.FINEST, e.getMessage(), e);
-        } finally {
-            lock.unlock();
         }
     }
 

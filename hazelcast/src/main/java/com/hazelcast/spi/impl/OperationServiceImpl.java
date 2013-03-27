@@ -30,10 +30,7 @@ import com.hazelcast.partition.MigrationCycleOperation;
 import com.hazelcast.partition.PartitionInfo;
 import com.hazelcast.spi.*;
 import com.hazelcast.spi.annotation.PrivateApi;
-import com.hazelcast.spi.exception.CallTimeoutException;
-import com.hazelcast.spi.exception.PartitionMigratingException;
-import com.hazelcast.spi.exception.RetryableException;
-import com.hazelcast.spi.exception.WrongTargetException;
+import com.hazelcast.spi.exception.*;
 import com.hazelcast.spi.impl.PartitionIteratingOperation.PartitionResponse;
 import com.hazelcast.util.Clock;
 import com.hazelcast.util.ExceptionUtil;
@@ -174,7 +171,11 @@ final class OperationServiceImpl implements OperationService {
                         throw new PartitionMigratingException(node.getThisAddress(), partitionId,
                                 op.getClass().getName(), op.getServiceName());
                     }
-                    PartitionInfo partitionInfo = nodeEngine.getPartitionService().getPartitionInfo(partitionId);
+                    final PartitionInfo partitionInfo = nodeEngine.getPartitionService().getPartitionInfo(partitionId);
+                    if (partitionInfo == null) {
+                        throw new PartitionMigratingException(node.getThisAddress(), partitionId,
+                                op.getClass().getName(), op.getServiceName());
+                    }
                     final Address owner = partitionInfo.getReplicaAddress(op.getReplicaIndex());
                     final boolean validatesTarget = op.validatesTarget();
                     if (validatesTarget && !node.getThisAddress().equals(owner)) {
