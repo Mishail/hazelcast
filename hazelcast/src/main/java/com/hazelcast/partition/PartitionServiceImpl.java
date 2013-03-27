@@ -117,7 +117,7 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
         migrationExecutor = Executors.newSingleThreadExecutor(
                 new ExecutorThreadFactory(node.threadGroup, node.getConfig().getClassLoader()) {
                     protected String newThreadName() {
-                        return node.getThreadNamePrefix("migration");
+                        return node.getThreadNamePrefix("migration-executor");
                     }
                 });
         proxy = new PartitionServiceProxy(this);

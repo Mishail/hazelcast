@@ -51,11 +51,12 @@ public final class SpinReadWriteLock {
     }
 
     private boolean acquireReadLock(final long time, TimeUnit unit) throws InterruptedException {
-        final long timeInMillis = unit.toMillis(time);
+        final long timeInMillis = unit.toMillis(time > 0 ? time : 0);
+        final long spin = spinInterval;
         long elapsed = 0L;
         while (locked.get()) {
-            Thread.sleep(spinInterval);
-            if ((elapsed += spinInterval) > timeInMillis) {
+            Thread.sleep(spin);
+            if ((elapsed += spin) > timeInMillis) {
                 return false;
             }
         }
@@ -72,11 +73,12 @@ public final class SpinReadWriteLock {
     }
 
     private void acquireWriteLock() throws InterruptedException {
+        final long spin = spinInterval;
         while (!locked.compareAndSet(false, true)) {
-            Thread.sleep(spinInterval);
+            Thread.sleep(spin);
         }
         while (readCount.get() > 0) {
-            Thread.sleep(spinInterval);
+            Thread.sleep(spin);
         }
         // go on ...
     }

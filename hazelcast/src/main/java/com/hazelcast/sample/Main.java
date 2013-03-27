@@ -68,7 +68,7 @@ public class Main {
 
         final int k = args.length == 0 ? 10 : Integer.parseInt(args[0]);
         final int coreSize = Runtime.getRuntime().availableProcessors();
-        for (int i = 0; i < coreSize * 20; i++) {
+        for (int i = 0; i < coreSize; i++) {
             new Thread() {
                 public void run() {
                     Random rand = new Random();
