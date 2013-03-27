@@ -216,7 +216,9 @@ public class NodeEngineImpl implements NodeEngine {
 
     @PrivateApi
     public void handlePacket(Packet packet) {
-        if (packet.isHeaderSet(Packet.HEADER_OP)) {
+        if (packet.isHeaderSet(Packet.HEADER_MIGRATION)) {
+            node.partitionService.handleMigration(packet);
+        } else if (packet.isHeaderSet(Packet.HEADER_OP)) {
             operationService.handleOperation(packet);
         } else if (packet.isHeaderSet(Packet.HEADER_EVENT)) {
             eventService.handleEvent(packet);

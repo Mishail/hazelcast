@@ -73,7 +73,7 @@ public class Main {
                     Random rand = new Random();
                     while (true) {
                         // test.process(rand.nextInt(100000));
-                        map.put(rand.nextInt(1000000), "value");
+                        map.put(rand.nextInt(1000000), new byte[1000]);
                         count.incrementAndGet();
                     }
                 }

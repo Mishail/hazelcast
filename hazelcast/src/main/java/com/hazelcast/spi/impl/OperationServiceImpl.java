@@ -124,7 +124,6 @@ final class OperationServiceImpl implements OperationService {
                 throw e;
             }
         }
-//        new RemoteOperationProcessor(packet).run();
     }
 
     /**
@@ -564,6 +563,9 @@ final class OperationServiceImpl implements OperationService {
         Data opData = nodeEngine.toData(op);
         Packet packet = new Packet(opData, nodeEngine.getSerializationContext());
         packet.setHeader(Packet.HEADER_OP, true);
+        if (isMigrationOperation(op)) {
+            packet.setHeader(Packet.HEADER_MIGRATION, true);
+        }
         return nodeEngine.send(packet, connection);
     }
 

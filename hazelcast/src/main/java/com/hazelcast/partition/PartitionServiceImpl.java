@@ -22,14 +22,19 @@ import com.hazelcast.instance.Node;
 import com.hazelcast.logging.ILogger;
 import com.hazelcast.logging.SystemLogService;
 import com.hazelcast.nio.Address;
+import com.hazelcast.nio.Connection;
+import com.hazelcast.nio.Packet;
 import com.hazelcast.nio.protocol.Command;
 import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.partition.client.PartitionsHandler;
 import com.hazelcast.spi.*;
 import com.hazelcast.spi.annotation.ExecutedBy;
+import com.hazelcast.spi.annotation.PrivateApi;
 import com.hazelcast.spi.annotation.ThreadType;
 import com.hazelcast.spi.impl.NodeEngineImpl;
+import com.hazelcast.spi.impl.ResponseHandlerFactory;
 import com.hazelcast.util.Clock;
+import com.hazelcast.util.executor.ExecutorThreadFactory;
 
 import java.util.*;
 import java.util.concurrent.*;
@@ -54,7 +59,8 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
     private final ILogger logger;
     private final int partitionCount;
     private final PartitionInfo[] partitions;
-    private final MigrationThread migrationThread;
+    private final MigrationManagerThread migrationManagerThread;
+    private final ExecutorService migrationExecutor;
     private final int partitionMigrationInterval;
     private final long partitionMigrationTimeout;
     private final int immediateBackupInterval;
@@ -106,12 +112,18 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
         partitionMigrationTimeout = (long) (node.groupProperties.PARTITION_MIGRATION_TIMEOUT.getLong() * 1.5f);
         immediateBackupInterval = node.groupProperties.IMMEDIATE_BACKUP_INTERVAL.getInteger() * 1000;
 
-        migrationThread = new MigrationThread(node);
+        migrationManagerThread = new MigrationManagerThread(node);
+        migrationExecutor = Executors.newSingleThreadExecutor(
+                new ExecutorThreadFactory(node.threadGroup, node.getConfig().getClassLoader()) {
+                    protected String newThreadName() {
+                        return node.getThreadNamePrefix("migration");
+                    }
+                });
         proxy = new PartitionServiceProxy(this);
     }
 
     public void init(final NodeEngine nodeEngine, Properties properties) {
-        migrationThread.start();
+        migrationManagerThread.start();
 
         int partitionTableSendInterval = node.groupProperties.PARTITION_TABLE_SEND_INTERVAL.getInteger();
         if (partitionTableSendInterval <= 0) {
@@ -186,7 +198,7 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
     public void memberAdded(final MemberImpl member) {
         if (node.isMaster() && node.isActive()) {
             if (sendingDiffs.get()) {
-                logger.log(Level.INFO, "MigrationThread is already sending diffs for dead member, " +
+                logger.log(Level.INFO, "MigrationManagerThread is already sending diffs for dead member, " +
                         "no need to initiate task!");
             } else {
                 // to avoid repartitioning during a migration process.
@@ -203,7 +215,7 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
             return;
         }
         clearTaskQueues();
-        migrationThread.onMemberRemove(deadAddress);
+        migrationManagerThread.onMemberRemove(deadAddress);
         lock.lock();
         try {
             if (!activeMigrations.isEmpty() && node.isMaster()) {
@@ -627,6 +639,34 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
         return ownedPartitions;
     }
 
+    @PrivateApi
+    public void handleMigration(Packet packet) {
+        migrationExecutor.execute(new RemoteMigrationPacketProcessor(packet));
+    }
+
+    private class RemoteMigrationPacketProcessor implements Runnable {
+        final Packet packet;
+
+        RemoteMigrationPacketProcessor(Packet packet) {
+            this.packet = packet;
+        }
+
+        public void run() {
+            final Connection conn = packet.getConn();
+            try {
+                final Address caller = conn.getEndPoint();
+                final Data data = packet.getData();
+                final Operation op = (Operation) nodeEngine.toObject(data);
+                op.setNodeEngine(nodeEngine).setCallerAddress(caller);
+                op.setConnection(conn);
+                ResponseHandlerFactory.setRemoteResponseHandler(nodeEngine, op);
+                nodeEngine.getOperationService().runOperation(op);
+            } catch (Throwable e) {
+                logger.log(Level.SEVERE, e.getMessage(), e);
+            }
+        }
+    }
+
     public static class AssignPartitions extends AbstractOperation {
         public void run() {
             final PartitionServiceImpl service = getService();
@@ -910,14 +950,14 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
         }
     }
 
-    private class MigrationThread implements Runnable {
+    private class MigrationManagerThread implements Runnable {
         private final Thread thread;
         private boolean running = true;
         private boolean migrating = false;
         private volatile Runnable activeTask;
 
-        MigrationThread(Node node) {
-            thread = new Thread(node.threadGroup, this, node.getThreadNamePrefix("MigrationThread"));
+        MigrationManagerThread(Node node) {
+            thread = new Thread(node.threadGroup, this, node.getThreadNamePrefix("migration-manager"));
         }
 
         public void run() {
@@ -955,7 +995,7 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
                     }
                 }
             } catch (InterruptedException e) {
-                logger.log(Level.FINEST, "MigrationThread is interrupted: " + e.getMessage());
+                logger.log(Level.FINEST, "MigrationManagerThread is interrupted: " + e.getMessage());
                 running = false;
             } finally {
                 clearTaskQueues();
@@ -1032,7 +1072,8 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
 
     public void shutdown() {
         logger.log(Level.FINEST, "Shutting down the partition service");
-        migrationThread.stopNow();
+        migrationManagerThread.stopNow();
+        migrationExecutor.shutdownNow();
         reset();
     }
 
