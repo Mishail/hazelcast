@@ -51,7 +51,7 @@ public class Main {
         final TestObject test = hz.getDistributedObject(TestService.NAME, "");
         final AtomicInteger count = new AtomicInteger();
         final IMap<Object,Object> map = hz.getMap("test");
-        final int k = args.length == 0 ? 10 : Integer.parseInt(args[0]);
+        final int value = args.length == 0 ? 10 : Integer.parseInt(args[0]);
 
         new Thread() {
             public void run() {
@@ -62,7 +62,7 @@ public class Main {
                         return;
                     }
                     int k = count.getAndSet(0) / 5;
-                    System.err.println("Current -> " + k + ", Map-Size(" + k + "): " + map.size());
+                    System.err.println("Current -> " + k + ", Map-Size(" + value + "): " + map.size());
                 }
             }
         }.start();
@@ -74,7 +74,7 @@ public class Main {
                     Random rand = new Random();
                     while (true) {
                         // test.process(rand.nextInt(100000));
-                        map.put(rand.nextInt(1000000), new byte[k]);
+                        map.put(rand.nextInt(1000000), new byte[value]);
                         count.incrementAndGet();
                     }
                 }
