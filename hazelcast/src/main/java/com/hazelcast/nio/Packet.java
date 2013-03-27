@@ -61,6 +61,10 @@ public final class Packet extends DataWriter implements SocketWritable {
         return (header & 1 << bit) != 0;
     }
 
+    public byte getHeader() {
+        return header;
+    }
+
     public void onEnqueue() {
     }
 

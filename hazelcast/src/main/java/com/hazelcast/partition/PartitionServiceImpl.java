@@ -31,6 +31,7 @@ import com.hazelcast.spi.*;
 import com.hazelcast.spi.annotation.ExecutedBy;
 import com.hazelcast.spi.annotation.PrivateApi;
 import com.hazelcast.spi.annotation.ThreadType;
+import com.hazelcast.spi.exception.RetryableHazelcastException;
 import com.hazelcast.spi.impl.NodeEngineImpl;
 import com.hazelcast.spi.impl.ResponseHandlerFactory;
 import com.hazelcast.util.Clock;
@@ -659,8 +660,13 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
                 final Operation op = (Operation) nodeEngine.toObject(data);
                 op.setNodeEngine(nodeEngine).setCallerAddress(caller);
                 op.setConnection(conn);
-                ResponseHandlerFactory.setRemoteResponseHandler(nodeEngine, op);
-                nodeEngine.getOperationService().runOperation(op);
+                final ResponseHandler rh = ResponseHandlerFactory.createRemoteResponseHandler(nodeEngine, op);
+                if (node.joined()) {
+                    op.setResponseHandler(rh);
+                    nodeEngine.getOperationService().runOperation(op);
+                } else {
+                    rh.sendResponse(new RetryableHazelcastException("Node is not joined to the cluster yet!"));
+                }
             } catch (Throwable e) {
                 logger.log(Level.SEVERE, e.getMessage(), e);
             }

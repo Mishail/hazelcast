@@ -223,7 +223,7 @@ public class NodeEngineImpl implements NodeEngine {
         } else if (packet.isHeaderSet(Packet.HEADER_EVENT)) {
             eventService.handleEvent(packet);
         } else {
-            throw new IllegalArgumentException("Unknown packet type !");
+            logger.log(Level.SEVERE, "Unknown packet type! Header: " + packet.getHeader());
         }
     }
 
