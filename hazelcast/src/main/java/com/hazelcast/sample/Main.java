@@ -22,6 +22,7 @@ import com.hazelcast.config.XmlConfigBuilder;
 import com.hazelcast.core.DistributedObject;
 import com.hazelcast.core.Hazelcast;
 import com.hazelcast.core.HazelcastInstance;
+import com.hazelcast.core.IMap;
 import com.hazelcast.nio.serialization.IdentifiedDataSerializable;
 import com.hazelcast.spi.*;
 
@@ -39,6 +40,7 @@ public class Main {
         final Config config = new XmlConfigBuilder().build();
         config.getServicesConfig().addServiceConfig(
                 new ServiceConfig().setName(TestService.NAME).setServiceImpl(new TestService()).setEnabled(true));
+        config.getMapConfig("test").setBackupCount(0);
 
         final HazelcastInstance hz = Hazelcast.newHazelcastInstance(config);
 //        Hazelcast.newHazelcastInstance(config);
@@ -64,12 +66,14 @@ public class Main {
         }.start();
 
         final int coreSize = Runtime.getRuntime().availableProcessors();
+        final IMap<Object,Object> map = hz.getMap("test");
         for (int i = 0; i < coreSize * 20; i++) {
             new Thread() {
                 public void run() {
                     Random rand = new Random();
                     while (true) {
-                        test.process(rand.nextInt(100000));
+                        // test.process(rand.nextInt(100000));
+                        map.put(rand.nextInt(1000000), "value");
                         count.incrementAndGet();
                     }
                 }
