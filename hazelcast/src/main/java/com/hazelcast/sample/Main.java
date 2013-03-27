@@ -23,7 +23,9 @@ import com.hazelcast.core.DistributedObject;
 import com.hazelcast.core.Hazelcast;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.core.IMap;
+import com.hazelcast.nio.serialization.Data;
 import com.hazelcast.nio.serialization.IdentifiedDataSerializable;
+import com.hazelcast.nio.serialization.SerializationConstants;
 import com.hazelcast.spi.*;
 
 import java.util.Properties;
@@ -67,6 +69,7 @@ public class Main {
             }
         }.start();
 
+        final Data data = new Data(SerializationConstants.CONSTANT_TYPE_BYTE_ARRAY, new byte[value]);
         final int coreSize = Runtime.getRuntime().availableProcessors();
         for (int i = 0; i < coreSize * 20; i++) {
             new Thread() {
@@ -74,7 +77,7 @@ public class Main {
                     Random rand = new Random();
                     while (true) {
                         // test.process(rand.nextInt(100000));
-                        map.put(rand.nextInt(1000000), new byte[value]);
+                        map.put(rand.nextInt(1000000), /*new byte[value]*/ data);
                         count.incrementAndGet();
                     }
                 }
