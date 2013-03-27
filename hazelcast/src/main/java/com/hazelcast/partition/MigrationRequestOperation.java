@@ -24,6 +24,7 @@ import com.hazelcast.nio.ObjectDataInput;
 import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.nio.serialization.SerializationService;
 import com.hazelcast.spi.*;
+import com.hazelcast.spi.exception.RetryableHazelcastException;
 import com.hazelcast.spi.impl.NodeEngineImpl;
 
 import java.io.IOException;
@@ -47,7 +48,7 @@ public final class MigrationRequestOperation extends BaseMigrationOperation {
         final Address from = migrationInfo.getFromAddress();
         final Address to = migrationInfo.getToAddress();
         if (to.equals(from)) {
-            getLogger().log(Level.FINEST, "To and from addresses are same! => " + toString());
+            getLogger().log(Level.WARNING, "To and from addresses are the same! => " + toString());
             success = false;
             return;
         }
@@ -59,9 +60,7 @@ public final class MigrationRequestOperation extends BaseMigrationOperation {
                 final PartitionServiceImpl partitionService = getService();
                 Member target = partitionService.getMember(to);
                 if (target == null) {
-                    getLogger().log(Level.WARNING, "Target member of task could not be found! => " + toString());
-                    success = false;
-                    return;
+                    throw new RetryableHazelcastException("Destination of migration could not be found! => " + toString());
                 }
                 partitionService.addActiveMigration(migrationInfo);
                 final NodeEngine nodeEngine = getNodeEngine();
