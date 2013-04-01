@@ -42,7 +42,6 @@ public class LongRunningTest {
     private int starts, stops, restarts = 0;
 
     public static void main(String[] args) {
-        System.setProperty("hazelcast.local.localAddress", "127.0.0.1");
         LongRunningTest t = new LongRunningTest();
         t.run();
     }
@@ -150,8 +149,6 @@ public class LongRunningTest {
             this.nodeId = nodeId;
             es = Executors.newFixedThreadPool(threadCount);
             Config cfg = new XmlConfigBuilder().build();
-            cfg.getNetworkConfig().getJoin().getMulticastConfig().setEnabled(false);
-            cfg.getNetworkConfig().getJoin().getTcpIpConfig().setEnabled(true);
             cfg.getMapConfig("default").setBackupCount(0);
             hazelcast = Hazelcast.newHazelcastInstance(cfg);
             esStats = Executors.newSingleThreadExecutor();
@@ -258,7 +255,6 @@ public class LongRunningTest {
 
     static {
         System.setProperty("hazelcast.version.check.enabled", "false");
-        System.setProperty("hazelcast.local.localAddress", "127.0.0.1");
         System.setProperty("hazelcast.socket.bind.any", "false");
         System.setProperty("hazelcast.partition.migration.interval", "0");
     }

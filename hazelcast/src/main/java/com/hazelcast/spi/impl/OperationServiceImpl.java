@@ -165,7 +165,7 @@ final class OperationServiceImpl implements OperationService {
                 final SpinReadWriteLock migrationLock = partitionLocks[partitionId];
                 if (op instanceof PartitionLevelOperation) {
                     final SpinLock partitionLock = migrationLock.writeLock();
-                    if (!partitionLock.tryLock(5, TimeUnit.SECONDS)) {
+                    if (!partitionLock.tryLock(60, TimeUnit.SECONDS)) {
                         throw new IllegalStateException("COULD NOT ACQUIRE MIGRATION LOCK!");
                     }
                     finalizer.setPartitionLock(partitionLock);
