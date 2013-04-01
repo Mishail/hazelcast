@@ -148,23 +148,23 @@ final class OperationServiceImpl implements OperationService {
         Lock keyLock = null;
         RemoteCallKey callKey = null;
         try {
-            if (isCallTimedOut(op)) {
-                Object response = new CallTimeoutException("Call timed out for " + op.getClass().getName()
-                        + ", call-time: " + op.getInvocationTime() + ", timeout: " + op.getCallTimeout());
-                op.getResponseHandler().sendResponse(response);
-                return;
-            }
+//            if (isCallTimedOut(op)) {
+//                Object response = new CallTimeoutException("Call timed out for " + op.getClass().getName()
+//                        + ", call-time: " + op.getInvocationTime() + ", timeout: " + op.getCallTimeout());
+//                op.getResponseHandler().sendResponse(response);
+//                return;
+//            }
             threadContext.setCurrentOperation(op);
-            callKey = beforeCallExecution(op);
+//            callKey = beforeCallExecution(op);
             final int partitionId = op.getPartitionId();
             if (op instanceof PartitionAwareOperation) {
                 if (partitionId < 0) {
                     throw new IllegalArgumentException("Partition id cannot be negative! -> " + partitionId);
                 }
-                if (!OperationAccessor.isMigrationOperation(op) && node.partitionService.isPartitionMigrating(partitionId)) {
-                    throw new PartitionMigratingException(node.getThisAddress(), partitionId,
-                            op.getClass().getName(), op.getServiceName());
-                }
+//                if (!OperationAccessor.isMigrationOperation(op) && node.partitionService.isPartitionMigrating(partitionId)) {
+//                    throw new PartitionMigratingException(node.getThisAddress(), partitionId,
+//                            op.getClass().getName(), op.getServiceName());
+//                }
                 final ReadWriteLock migrationLock = partitionLocks[partitionId];
                 if (op instanceof PartitionLevelOperation) {
 //                    final Lock tmpPartitionLock = migrationLock.writeLock();
@@ -179,16 +179,16 @@ final class OperationServiceImpl implements OperationService {
 //                                op.getClass().getName(), op.getServiceName());
 //                    }
 //                    partitionLock = tmpPartitionLock;
-                    final PartitionInfo partitionInfo = nodeEngine.getPartitionService().getPartitionInfo(partitionId);
-                    if (partitionInfo == null) {
-                        throw new PartitionMigratingException(node.getThisAddress(), partitionId,
-                                op.getClass().getName(), op.getServiceName());
-                    }
-                    final Address owner = partitionInfo.getReplicaAddress(op.getReplicaIndex());
-                    if (op.validatesTarget() && !node.getThisAddress().equals(owner)) {
-                        throw new WrongTargetException(node.getThisAddress(), owner, partitionId, op.getReplicaIndex(),
-                                op.getClass().getName(), op.getServiceName());
-                    }
+//                    final PartitionInfo partitionInfo = nodeEngine.getPartitionService().getPartitionInfo(partitionId);
+//                    if (partitionInfo == null) {
+//                        throw new PartitionMigratingException(node.getThisAddress(), partitionId,
+//                                op.getClass().getName(), op.getServiceName());
+//                    }
+//                    final Address owner = partitionInfo.getReplicaAddress(op.getReplicaIndex());
+//                    if (op.validatesTarget() && !node.getThisAddress().equals(owner)) {
+//                        throw new WrongTargetException(node.getThisAddress(), owner, partitionId, op.getReplicaIndex(),
+//                                op.getClass().getName(), op.getServiceName());
+//                    }
                     if (op instanceof KeyBasedOperation && !(op instanceof BackupOperation)) {
                         final int hash = ((KeyBasedOperation) op).getKeyHash();
                         final Lock[] locks = ownerLocks;
@@ -204,7 +204,7 @@ final class OperationServiceImpl implements OperationService {
         } catch (Throwable e) {
             handleOperationError(op, e);
         } finally {
-            afterCallExecution(op, callKey);
+//            afterCallExecution(op, callKey);
             if (keyLock != null) {
                 keyLock.unlock();
             }
