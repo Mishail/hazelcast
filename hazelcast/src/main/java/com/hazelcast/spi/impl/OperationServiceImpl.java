@@ -32,7 +32,8 @@ import com.hazelcast.spi.*;
 import com.hazelcast.spi.annotation.PrivateApi;
 import com.hazelcast.spi.exception.*;
 import com.hazelcast.spi.impl.PartitionIteratingOperation.PartitionResponse;
-import com.hazelcast.util.*;
+import com.hazelcast.util.Clock;
+import com.hazelcast.util.ExceptionUtil;
 import com.hazelcast.util.executor.BlockingFastExecutor;
 import com.hazelcast.util.executor.FastExecutor;
 import com.hazelcast.util.executor.PoolExecutorThreadFactory;
@@ -42,7 +43,9 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.logging.Level;
 
 /**
@@ -56,7 +59,7 @@ final class OperationServiceImpl implements OperationService {
     private final AtomicLong remoteCallIdGen = new AtomicLong();
     private final ConcurrentMap<Long, RemoteCall> remoteCalls;
     private final Lock[] ownerLocks;
-    private final SpinReadWriteLock[] partitionLocks;
+    private final ReadWriteLock[] partitionLocks;
     private final FastExecutor executor;
     private final long defaultCallTimeout;
     private final Set<RemoteCallKey> executingCalls;
@@ -97,9 +100,10 @@ final class OperationServiceImpl implements OperationService {
             ownerLocks[i] = new ReentrantLock();
         }
         int partitionCount = node.groupProperties.PARTITION_COUNT.getInteger();
-        partitionLocks = new SpinReadWriteLock[partitionCount];
+        partitionLocks = new ReadWriteLock[partitionCount];
         for (int i = 0; i < partitionCount; i++) {
-            partitionLocks[i] = new SpinReadWriteLock(1, TimeUnit.MILLISECONDS);
+//            partitionLocks[i] = new SpinReadWriteLock(1, TimeUnit.MILLISECONDS);
+            partitionLocks[i] = new ReentrantReadWriteLock();
         }
         executingCalls = Collections.newSetFromMap(new ConcurrentHashMap<RemoteCallKey, Boolean>(1000, 0.75f, (reallyMultiCore ? coreSize * 4 : 16)));
     }
@@ -140,7 +144,7 @@ final class OperationServiceImpl implements OperationService {
      */
     public void runOperation(final Operation op) {
         final ThreadContext threadContext = ThreadContext.getOrCreate();
-        SpinLock partitionLock = null;
+        Lock partitionLock = null;
         Lock keyLock = null;
         RemoteCallKey callKey = null;
         try {
@@ -161,15 +165,15 @@ final class OperationServiceImpl implements OperationService {
                     throw new PartitionMigratingException(node.getThisAddress(), partitionId,
                             op.getClass().getName(), op.getServiceName());
                 }
-                final SpinReadWriteLock migrationLock = partitionLocks[partitionId];
+                final ReadWriteLock migrationLock = partitionLocks[partitionId];
                 if (op instanceof PartitionLevelOperation) {
-                    final SpinLock tmpPartitionLock = migrationLock.writeLock();
+                    final Lock tmpPartitionLock = migrationLock.writeLock();
                     if (!tmpPartitionLock.tryLock(60, TimeUnit.SECONDS)) {     // TODO: @mm !
                         throw new IllegalStateException("COULD NOT ACQUIRE MIGRATION LOCK!");
                     }
                     partitionLock = tmpPartitionLock;
                 } else {
-                    final SpinLock tmpPartitionLock = migrationLock.readLock();
+                    final Lock tmpPartitionLock = migrationLock.readLock();
                     if (!tmpPartitionLock.tryLock(100, TimeUnit.MILLISECONDS)) {
                         throw new PartitionMigratingException(node.getThisAddress(), partitionId,
                                 op.getClass().getName(), op.getServiceName());

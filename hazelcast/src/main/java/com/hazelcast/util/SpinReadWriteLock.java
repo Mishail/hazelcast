@@ -21,11 +21,13 @@ import com.hazelcast.core.HazelcastException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.ReadWriteLock;
 
 /**
  * @mdogan 12/3/12
  */
-public final class SpinReadWriteLock {
+public final class SpinReadWriteLock implements ReadWriteLock {
 
     private final long spinInterval; // in ms
 
@@ -100,7 +102,15 @@ public final class SpinReadWriteLock {
 
     private final class ReadLock implements SpinLock {
 
-        public void lock() throws InterruptedException {
+        public void lock() {
+            try {
+                lockInterruptibly();
+            } catch (InterruptedException e) {
+                throw new HazelcastException(e);
+            }
+        }
+
+        public void lockInterruptibly() throws InterruptedException {
             if (!tryLock(Long.MAX_VALUE, TimeUnit.MILLISECONDS)) {
                 throw new HazelcastException();
             }
@@ -121,11 +131,23 @@ public final class SpinReadWriteLock {
         public void unlock() {
             releaseReadLock();
         }
+
+        public Condition newCondition() {
+            throw new UnsupportedOperationException();
+        }
     }
 
     private final class WriteLock implements SpinLock {
 
-        public void lock() throws InterruptedException{
+        public void lock() {
+            try {
+                lockInterruptibly();
+            } catch (InterruptedException e) {
+                throw new HazelcastException(e);
+            }
+        }
+
+        public void lockInterruptibly() throws InterruptedException {
             if (!tryLock(Long.MAX_VALUE, TimeUnit.MILLISECONDS)) {
                 throw new HazelcastException();
             }
@@ -146,6 +168,11 @@ public final class SpinReadWriteLock {
 
         public void unlock() {
             releaseWriteLock();
+        }
+
+        @Override
+        public Condition newCondition() {
+            throw new UnsupportedOperationException();
         }
     }
 

@@ -20,6 +20,7 @@ import com.hazelcast.core.HazelcastException;
 
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.Condition;
 
 /**
  * @mdogan 3/29/13
@@ -39,7 +40,15 @@ public final class SimpleSpinLock implements SpinLock {
         this.spinInterval = millis > 0 ? millis : 1;
     }
 
-    public void lock() throws InterruptedException {
+    public void lock() {
+        try {
+            lockInterruptibly();
+        } catch (InterruptedException e) {
+            throw new HazelcastException(e);
+        }
+    }
+
+    public void lockInterruptibly() throws InterruptedException {
         if (!tryLock(Long.MAX_VALUE, TimeUnit.MILLISECONDS)) {
             throw new HazelcastException();
         }
@@ -70,5 +79,9 @@ public final class SimpleSpinLock implements SpinLock {
         if (!locked.getAndSet(false)) {
             throw new IllegalMonitorStateException("Current thread is not owner of the lock!");
         }
+    }
+
+    public Condition newCondition() {
+        throw new UnsupportedOperationException();
     }
 }
