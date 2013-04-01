@@ -29,7 +29,7 @@ import java.util.Collection;
 import java.util.LinkedList;
 import java.util.logging.Level;
 
-public class FinalizeMigrationOperation extends AbstractOperation
+public final class FinalizeMigrationOperation extends AbstractOperation
         implements PartitionLevelOperation, MigrationCycleOperation {
 
     private MigrationEndpoint endpoint;     // source of destination
@@ -88,6 +88,11 @@ public class FinalizeMigrationOperation extends AbstractOperation
 
     @Override
     public boolean returnsResponse() {
+        return false;
+    }
+
+    @Override
+    public boolean validatesTarget() {
         return false;
     }
 

@@ -18,59 +18,30 @@ package com.hazelcast.util.executor;
 
 import com.hazelcast.util.Clock;
 
-import java.util.Collection;
-import java.util.Collections;
 import java.util.concurrent.*;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * @mdogan 12/17/12
  */
-public class BlockingFastExecutor implements FastExecutor {
+public class BlockingFastExecutor extends FastExecutorSupport implements FastExecutor {
 
     private final BlockingQueue<WorkerTask> queue;
-    private final Collection<Thread> threads = Collections.newSetFromMap(new ConcurrentHashMap<Thread, Boolean>());
-    private final ThreadFactory threadFactory;
-    private final int coreThreadSize;
-    private final int maxThreadSize;
-    private final long backlogInterval;
-    private final long keepAliveMillis;
-    private final boolean allowCoreThreadTimeout;
-    private final Lock lock = new ReentrantLock();
-
-    private volatile WorkerLifecycleInterceptor interceptor;
-    private volatile int activeThreadCount;
-    private volatile boolean live = true;
 
     public BlockingFastExecutor(int coreThreadSize, String namePrefix, ThreadFactory threadFactory) {
-        this(coreThreadSize, coreThreadSize * 20, Math.max(Integer.MAX_VALUE, coreThreadSize * (1 << 16)),
-                500L, namePrefix, threadFactory, TimeUnit.SECONDS.toMillis(60), false, true);
+        this(coreThreadSize, coreThreadSize * 10, coreThreadSize * (1 << 16),
+                500L, namePrefix, threadFactory, TimeUnit.SECONDS.toMillis(60), false);
     }
 
     public BlockingFastExecutor(int coreThreadSize, int maxThreadSize, int queueCapacity,
                                 long backlogIntervalInMillis, String namePrefix, ThreadFactory threadFactory,
-                                long keepAliveMillis, boolean allowCoreThreadTimeout, boolean startCoreThreads) {
-        this.threadFactory = threadFactory;
-        this.keepAliveMillis = keepAliveMillis;
-        this.coreThreadSize = coreThreadSize;
-        this.maxThreadSize = maxThreadSize;
-        this.backlogInterval = backlogIntervalInMillis;
-        this.allowCoreThreadTimeout = allowCoreThreadTimeout;
-        this.queue = new LinkedBlockingQueue<WorkerTask>(queueCapacity);
+                                long keepAliveMillis, boolean allowCoreThreadTimeout) {
 
-        Thread t = new Thread(new BacklogDetector(), namePrefix + "backlog");
-        threads.add(t);
-        if (startCoreThreads) {
-            t.start();
-        }
-        for (int i = 0; i < coreThreadSize; i++) {
-            addWorker(startCoreThreads);
-        }
+        super(coreThreadSize, maxThreadSize, queueCapacity, backlogIntervalInMillis, namePrefix,
+                threadFactory, keepAliveMillis, allowCoreThreadTimeout);
+        this.queue = new LinkedBlockingQueue<WorkerTask>(queueCapacity > 0 ? queueCapacity : Integer.MAX_VALUE);
     }
 
-    public void execute(Runnable command) {
-        if (!live) throw new RejectedExecutionException("Executor has been shutdown!");
+    protected boolean offerTask(Runnable command) {
         try {
             if (!queue.offer(new WorkerTask(command), backlogInterval, TimeUnit.MILLISECONDS)) {
                 throw new RejectedExecutionException("Executor reached to max capacity!");
@@ -78,38 +49,19 @@ public class BlockingFastExecutor implements FastExecutor {
         } catch (InterruptedException e) {
             throw new RejectedExecutionException(e);
         }
+        return true;
     }
 
-    public void start() {
-        for (Thread thread : threads) {
-            if (thread.getState() == Thread.State.NEW) {
-                thread.start();
-            }
-        }
-    }
-
-    public void shutdown() {
-        live = false;
-        for (Thread thread : threads) {
-            thread.interrupt();
-        }
+    protected void onShutdown() {
         queue.clear();
-        threads.clear();
     }
 
-    private void addWorker(boolean start) {
-        lock.lock();
-        try {
-            final Worker worker = new Worker();
-            final Thread thread = threadFactory.newThread(worker);
-            if (start) {
-                thread.start();
-            }
-            activeThreadCount++;
-            threads.add(thread);
-        } finally {
-            lock.unlock();
-        }
+    protected Runnable createBacklogDetector() {
+        return new BacklogDetector();
+    }
+
+    protected Runnable createWorker() {
+        return new Worker();
     }
 
     private class Worker implements Runnable {
@@ -117,25 +69,14 @@ public class BlockingFastExecutor implements FastExecutor {
             final Thread currentThread = Thread.currentThread();
             final boolean take = keepAliveMillis <= 0 || keepAliveMillis == Long.MAX_VALUE;
             final long timeout = keepAliveMillis;
-            while (!currentThread.isInterrupted() && live) {
+            while (!currentThread.isInterrupted() && isLive()) {
                 try {
                     final WorkerTask task = take ? queue.take() : queue.poll(timeout, TimeUnit.MILLISECONDS);
                     if (task != null) {
                         task.run();
                     } else {
-                        lock.lockInterruptibly();
-                        try {
-                            if (activeThreadCount > coreThreadSize || allowCoreThreadTimeout) {
-                                threads.remove(currentThread);
-                                activeThreadCount--;
-                                final WorkerLifecycleInterceptor workerInterceptor = interceptor;
-                                if (workerInterceptor != null) {
-                                    workerInterceptor.afterWorkerTerminate();
-                                }
-                                return;
-                            }
-                        } finally {
-                            lock.unlock();
+                        if (removeWorker(currentThread)) {
+                            return;
                         }
                     }
                 } catch (InterruptedException e) {
@@ -151,24 +92,18 @@ public class BlockingFastExecutor implements FastExecutor {
             long currentBacklogInterval = backlogInterval;
             final Thread thread = Thread.currentThread();
             int k = 0;
-            while (!thread.isInterrupted() && live) {
+            while (!thread.isInterrupted() && isLive()) {
                 long sleep = 100;
                 final WorkerTask task = queue.peek();
                 if (task != null) {
                     if (task.creationTime + currentBacklogInterval < Clock.currentTimeMillis()) {
-                        if (activeThreadCount < maxThreadSize) {
-                            final WorkerLifecycleInterceptor workerInterceptor = interceptor;
-                            if (workerInterceptor != null) {
-                                workerInterceptor.beforeWorkerStart();
-                            }
-                            addWorker(true);
-                        }
+                        addWorkerIfUnderMaxSize();
                     }
                 }
                 try {
                     Thread.sleep(sleep);
                     if (k++ % 300 == 0) {
-                        System.err.println("DEBUG: Current operation thread count-> " + activeThreadCount);
+                        System.err.println("DEBUG: Current operation thread count-> " + getActiveThreadCount());
                     }
                 } catch (InterruptedException e) {
                     return;
@@ -177,36 +112,4 @@ public class BlockingFastExecutor implements FastExecutor {
         }
     }
 
-    private class WorkerTask implements Runnable {
-        final long creationTime = Clock.currentTimeMillis();
-        final Runnable task;
-
-        private WorkerTask(Runnable task) {
-            this.task = task;
-        }
-
-        public void run() {
-            task.run();
-        }
-    }
-
-    public void setInterceptor(WorkerLifecycleInterceptor interceptor) {
-        this.interceptor = interceptor;
-    }
-
-    public int getCoreThreadSize() {
-        return coreThreadSize;
-    }
-
-    public int getMaxThreadSize() {
-        return maxThreadSize;
-    }
-
-    public long getKeepAliveMillis() {
-        return keepAliveMillis;
-    }
-
-    public int getActiveThreadCount() {
-        return activeThreadCount;
-    }
 }

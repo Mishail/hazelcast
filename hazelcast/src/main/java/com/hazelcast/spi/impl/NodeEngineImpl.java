@@ -65,7 +65,7 @@ public class NodeEngineImpl implements NodeEngine {
         operationService = new OperationServiceImpl(this);
         eventService = new EventServiceImpl(this);
         asyncInvocationService = new AsyncInvocationServiceImpl(this);
-        waitNotifyService = new WaitNotifyServiceImpl(this, new WaitingOpProcessorImpl());
+        waitNotifyService = new WaitNotifyServiceImpl(this);
         transactionManagerService = new TransactionManagerServiceImpl(this);
     }
 
@@ -77,6 +77,10 @@ public class NodeEngineImpl implements NodeEngine {
 
     public Address getThisAddress() {
         return node.getThisAddress();
+    }
+
+    public Address getMasterAddress() {
+        return node.getMasterAddress();
     }
 
     public MemberImpl getLocalMember() {
@@ -310,16 +314,5 @@ public class NodeEngineImpl implements NodeEngine {
         asyncInvocationService.shutdown();
         eventService.shutdown();
         operationService.shutdown();
-    }
-
-    private class WaitingOpProcessorImpl implements WaitNotifyServiceImpl.WaitingOpProcessor {
-
-        public void invalidate(final WaitNotifyServiceImpl.WaitingOp so) throws Exception {
-            operationService.executeOperation(so);
-        }
-
-        public void processUnderExistingLock(Operation operation) {
-            operationService.runOperationUnderExistingLock(operation);
-        }
     }
 }

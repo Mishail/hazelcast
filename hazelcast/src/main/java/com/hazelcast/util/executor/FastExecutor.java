@@ -23,8 +23,6 @@ import java.util.concurrent.Executor;
  */
 public interface FastExecutor extends Executor {
 
-    void start();
-
     void shutdown();
 
     void setInterceptor(WorkerLifecycleInterceptor interceptor);

@@ -246,6 +246,10 @@ public class StaticNodeRegistry {
 
             public void searchForOtherClusters() {
             }
+
+            public String toString() {
+                return "StaticJoiner";
+            }
         }
     }
 }

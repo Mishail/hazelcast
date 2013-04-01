@@ -91,13 +91,17 @@ public final class SpinReadWriteLock {
 
     private final class ReadLock implements SpinLock {
 
-        public void lock() {
+        public void lock() throws InterruptedException {
+            if (!tryLock(Long.MAX_VALUE, TimeUnit.MILLISECONDS)) {
+                throw new HazelcastException();
+            }
+        }
+
+        public boolean tryLock() {
             try {
-                if (!tryLock(Long.MAX_VALUE, TimeUnit.MILLISECONDS)) {
-                    throw new HazelcastException();
-                }
+                return tryLock(0, TimeUnit.MILLISECONDS);
             } catch (InterruptedException e) {
-                throw new HazelcastException(e);
+                return false;
             }
         }
 
@@ -112,15 +116,22 @@ public final class SpinReadWriteLock {
 
     private final class WriteLock implements SpinLock {
 
-        public void lock() {
+        public void lock() throws InterruptedException{
+            acquireWriteLock();
+        }
+
+        public boolean tryLock() {
+            // TODO: tryLock can be implemented later...
             try {
                 acquireWriteLock();
+                return true;
             } catch (InterruptedException e) {
-                throw new HazelcastException(e);
+                return false;
             }
         }
 
         public boolean tryLock(long time, TimeUnit unit) throws InterruptedException {
+            // TODO: tryLock can be implemented later...
             acquireWriteLock();
             return true;
         }

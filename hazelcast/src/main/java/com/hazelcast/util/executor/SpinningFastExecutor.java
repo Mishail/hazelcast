@@ -18,65 +18,39 @@ package com.hazelcast.util.executor;
 
 import com.hazelcast.util.Clock;
 
-import java.util.Collection;
-import java.util.Collections;
 import java.util.Queue;
-import java.util.concurrent.*;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.LockSupport;
-import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * @mdogan 12/17/12
  */
-public class SpinningFastExecutor implements FastExecutor {
+public class SpinningFastExecutor extends FastExecutorSupport implements FastExecutor {
 
     private final Queue<WorkerTask> queue;
-    private final Collection<Thread> threads = Collections.newSetFromMap(new ConcurrentHashMap<Thread, Boolean>());
-    private final ThreadFactory threadFactory;
-    private final int coreThreadSize;
-    private final int maxThreadSize;
-    private final long backlogInterval;
-    private final long keepAliveMillis;
-    private final boolean allowCoreThreadTimeout;
-    private final Lock lock = new ReentrantLock();
     private final Condition signalWorker = lock.newCondition();
     private final AtomicInteger spinningThreads = new AtomicInteger();
 
-    private volatile WorkerLifecycleInterceptor interceptor;
-    private volatile int activeThreadCount;
-    private volatile boolean live = true;
-
     public SpinningFastExecutor(int coreThreadSize, String namePrefix, ThreadFactory threadFactory) {
-        this(coreThreadSize, coreThreadSize * 20, Math.max(Integer.MAX_VALUE, coreThreadSize * (1 << 16)),
-                500L, namePrefix, threadFactory, TimeUnit.SECONDS.toMillis(60), false, true);
+        this(coreThreadSize, coreThreadSize * 10, coreThreadSize * (1 << 16),
+                500L, namePrefix, threadFactory, TimeUnit.SECONDS.toMillis(60), false);
     }
 
     public SpinningFastExecutor(int coreThreadSize, int maxThreadSize, int queueCapacity,
                                 long backlogIntervalInMillis, String namePrefix, ThreadFactory threadFactory,
-                                long keepAliveMillis, boolean allowCoreThreadTimeout, boolean startCoreThreads) {
-        this.threadFactory = threadFactory;
-        this.keepAliveMillis = keepAliveMillis;
-        this.coreThreadSize = coreThreadSize;
-        this.maxThreadSize = maxThreadSize;
-        this.backlogInterval = backlogIntervalInMillis;
-        this.allowCoreThreadTimeout = allowCoreThreadTimeout;
-        this.queue = new ConcurrentLinkedQueue<WorkerTask>();  // TODO: @mm - capacity check!
+                                long keepAliveMillis, boolean allowCoreThreadTimeout) {
 
-        Thread t = new Thread(new BacklogDetector(), namePrefix + "backlog");
-        threads.add(t);
-        if (startCoreThreads) {
-            t.start();
-        }
-        for (int i = 0; i < coreThreadSize; i++) {
-            addWorker(startCoreThreads);
-        }
+        super(coreThreadSize, maxThreadSize, queueCapacity, backlogIntervalInMillis, namePrefix,
+                threadFactory, keepAliveMillis, allowCoreThreadTimeout);
+        this.queue = new ConcurrentLinkedQueue<WorkerTask>();  // TODO: @mm - capacity check!
     }
 
-    public void execute(Runnable command) {
-        if (!live) throw new RejectedExecutionException("Executor has been shutdown!");
+    protected boolean offerTask(Runnable command) {
         if (!queue.offer(new WorkerTask(command))) {
             throw new RejectedExecutionException("Executor reached to max capacity!");
         }
@@ -88,38 +62,19 @@ public class SpinningFastExecutor implements FastExecutor {
                 lock.unlock();
             }
         }
+        return true;
     }
 
-    public void start() {
-        for (Thread thread : threads) {
-            if (thread.getState() == Thread.State.NEW) {
-                thread.start();
-            }
-        }
+    protected Runnable createBacklogDetector() {
+        return new BacklogDetector();
     }
 
-    public void shutdown() {
-        live = false;
-        for (Thread thread : threads) {
-            thread.interrupt();
-        }
+    protected Runnable createWorker() {
+        return new Worker();
+    }
+
+    protected void onShutdown() {
         queue.clear();
-        threads.clear();
-    }
-
-    private void addWorker(boolean start) {
-        lock.lock();
-        try {
-            final Worker worker = new Worker();
-            final Thread thread = threadFactory.newThread(worker);
-            if (start) {
-                thread.start();
-            }
-            activeThreadCount++;
-            threads.add(thread);
-        } finally {
-            lock.unlock();
-        }
     }
 
     private class Worker implements Runnable {
@@ -129,7 +84,7 @@ public class SpinningFastExecutor implements FastExecutor {
             final int park = 100000;
             final int spin = park + 1000;
             WorkerTask task = null;
-            while (!currentThread.isInterrupted() && live) {
+            while (!currentThread.isInterrupted() && isLive()) {
                 spinningThreads.incrementAndGet();
                 int c = spin;
                 while (c > 0) {
@@ -154,16 +109,8 @@ public class SpinningFastExecutor implements FastExecutor {
                         signalWorker.await(timeout, TimeUnit.MILLISECONDS);
                         task = queue.poll();
                         System.err.println("DEBUG: Awaken from sleep -> " + currentThread.getName() + " TASK: " + task);
-                        if (task == null) {
-                            if (activeThreadCount > coreThreadSize || allowCoreThreadTimeout) {
-                                threads.remove(currentThread);
-                                activeThreadCount--;
-                                final WorkerLifecycleInterceptor workerInterceptor = interceptor;
-                                if (workerInterceptor != null) {
-                                    workerInterceptor.afterWorkerTerminate();
-                                }
-                                return;
-                            }
+                        if (task == null && removeWorker(currentThread)) {
+                            return;
                         }
                     } finally {
                         lock.unlock();
@@ -185,19 +132,13 @@ public class SpinningFastExecutor implements FastExecutor {
             final long signalInterval = Math.max(currentBacklogInterval / 5, 100);
             final Thread thread = Thread.currentThread();
             int k = 0;
-            while (!thread.isInterrupted() && live) {
+            while (!thread.isInterrupted() && isLive()) {
                 long sleep = 100;
                 final WorkerTask task = queue.peek();
                 if (task != null) {
                     final long now = Clock.currentTimeMillis();
                     if (task.creationTime + currentBacklogInterval < now) {
-                        if (activeThreadCount < maxThreadSize) {
-                            final WorkerLifecycleInterceptor workerInterceptor = interceptor;
-                            if (workerInterceptor != null) {
-                                workerInterceptor.beforeWorkerStart();
-                            }
-                            addWorker(true);
-                        }
+                        addWorkerIfUnderMaxSize();
                     } else if (task.creationTime + signalInterval < now) {
                         try {
                             lock.lockInterruptibly();
@@ -215,7 +156,7 @@ public class SpinningFastExecutor implements FastExecutor {
                 try {
                     Thread.sleep(sleep);
                     if (k++ % 300 == 0) {
-                        System.err.println("DEBUG: Current operation thread count-> " + activeThreadCount);
+                        System.err.println("DEBUG: Current operation thread count-> " + getActiveThreadCount());
                     }
                 } catch (InterruptedException e) {
                     return;
@@ -224,46 +165,4 @@ public class SpinningFastExecutor implements FastExecutor {
         }
     }
 
-    private class WorkerTask implements Runnable {
-        final long creationTime = Clock.currentTimeMillis();
-        final Runnable task;
-
-        private WorkerTask(Runnable task) {
-            this.task = task;
-        }
-
-        public void run() {
-            task.run();
-        }
-
-        @Override
-        public String toString() {
-            final StringBuilder sb = new StringBuilder();
-            sb.append("WorkerTask");
-            sb.append("{creationTime=").append(creationTime);
-            sb.append(", task=").append(task);
-            sb.append('}');
-            return sb.toString();
-        }
-    }
-
-    public void setInterceptor(WorkerLifecycleInterceptor interceptor) {
-        this.interceptor = interceptor;
-    }
-
-    public int getCoreThreadSize() {
-        return coreThreadSize;
-    }
-
-    public int getMaxThreadSize() {
-        return maxThreadSize;
-    }
-
-    public long getKeepAliveMillis() {
-        return keepAliveMillis;
-    }
-
-    public int getActiveThreadCount() {
-        return activeThreadCount;
-    }
 }

@@ -45,6 +45,14 @@ public final class MigrationRequestOperation extends BaseMigrationOperation {
     }
 
     public void run() {
+        final NodeEngine nodeEngine = getNodeEngine();
+        final Address masterAddress = nodeEngine.getMasterAddress();
+        if (!masterAddress.equals(migrationInfo.getMaster())) {
+            throw new RetryableHazelcastException("Migration initiator is not master node! => " + toString());
+        }
+        if (!masterAddress.equals(getCallerAddress())) {
+            throw new RetryableHazelcastException("Caller is not master node! => " + toString());
+        }
         final Address from = migrationInfo.getFromAddress();
         final Address to = migrationInfo.getToAddress();
         if (to.equals(from)) {
@@ -57,13 +65,12 @@ public final class MigrationRequestOperation extends BaseMigrationOperation {
         }
         if (migrationInfo.startProcessing()) {
             try {
-                final PartitionServiceImpl partitionService = getService();
-                Member target = partitionService.getMember(to);
+                final Member target = nodeEngine.getClusterService().getMember(to);
                 if (target == null) {
                     throw new RetryableHazelcastException("Destination of migration could not be found! => " + toString());
                 }
+                final PartitionServiceImpl partitionService = getService();
                 partitionService.addActiveMigration(migrationInfo);
-                final NodeEngine nodeEngine = getNodeEngine();
                 final long timeout = nodeEngine.getGroupProperties().PARTITION_MIGRATION_TIMEOUT.getLong();
                 final Collection<Operation> tasks = prepareMigrationTasks();
                 if (tasks.size() > 0) {
@@ -78,7 +85,7 @@ public final class MigrationRequestOperation extends BaseMigrationOperation {
                         final MigrationOperation migrationOperation = new MigrationOperation(migrationInfo, data, tasks.size());
                         Invocation inv = nodeEngine.getOperationService().createInvocationBuilder(PartitionServiceImpl.SERVICE_NAME,
                                 migrationOperation, to)
-                                .setTryCount(3).setTryPauseMillis(1000).setReplicaIndex(getReplicaIndex()).build();
+                                .setTryCount(10).setTryPauseMillis(1000).setReplicaIndex(getReplicaIndex()).build();
                         Future future = inv.invoke();
                         success = (Boolean) nodeEngine.toObject(future.get(timeout, TimeUnit.SECONDS));
                     } finally {
