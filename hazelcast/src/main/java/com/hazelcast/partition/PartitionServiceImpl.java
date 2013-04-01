@@ -503,8 +503,8 @@ public class PartitionServiceImpl implements PartitionService, ManagedService,
             final MigrationInfo currentMigrationInfo = activeMigrations.putIfAbsent(partitionId, migrationInfo);
             if (currentMigrationInfo != null) {
                 boolean oldMaster = false;
-                MigrationInfo oldMigration = null;
-                MigrationInfo newMigration = null;
+                MigrationInfo oldMigration;
+                MigrationInfo newMigration;
                 final MemberImpl masterMember = getMasterMember();
                 final String master = masterMember.getUuid();
                 if (!master.equals(currentMigrationInfo.getMasterUuid())) {  // master changed

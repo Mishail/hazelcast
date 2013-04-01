@@ -74,11 +74,14 @@ public final class SpinReadWriteLock {
 
     private boolean acquireWriteLock(final long time, TimeUnit unit) throws InterruptedException {
         final long spin = spinInterval;
-        while (!locked.compareAndSet(false, true)) {
-            Thread.sleep(spin);
-        }
         final long timeInMillis = unit.toMillis(time > 0 ? time : 0);
         long elapsed = 0L;
+        while (!locked.compareAndSet(false, true)) {
+            Thread.sleep(spin);
+            if ((elapsed += spin) > timeInMillis) {
+                return false;
+            }
+        }
         while (readCount.get() > 0) {
             Thread.sleep(spin);
             if ((elapsed += spin) > timeInMillis) {
