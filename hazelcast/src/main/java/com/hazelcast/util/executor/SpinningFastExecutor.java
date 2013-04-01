@@ -156,7 +156,7 @@ public class SpinningFastExecutor extends FastExecutorSupport implements FastExe
                 try {
                     Thread.sleep(sleep);
                     if (k++ % 300 == 0) {
-                        System.err.println("DEBUG: Current operation thread count-> " + getActiveThreadCount());
+                        System.err.println("DEBUG: SPINNING -> Current operation thread count-> " + getActiveThreadCount());
                     }
                 } catch (InterruptedException e) {
                     return;
