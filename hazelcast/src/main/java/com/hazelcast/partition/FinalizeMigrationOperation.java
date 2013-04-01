@@ -21,7 +21,6 @@ import com.hazelcast.nio.ObjectDataOutput;
 import com.hazelcast.spi.AbstractOperation;
 import com.hazelcast.spi.MigrationAwareService;
 import com.hazelcast.spi.MigrationServiceEvent;
-import com.hazelcast.spi.PartitionLevelOperation;
 import com.hazelcast.spi.impl.NodeEngineImpl;
 
 import java.io.IOException;
@@ -29,8 +28,9 @@ import java.util.Collection;
 import java.util.LinkedList;
 import java.util.logging.Level;
 
-public final class FinalizeMigrationOperation extends AbstractOperation
-        implements PartitionLevelOperation, MigrationCycleOperation {
+// runs locally...
+final class FinalizeMigrationOperation extends AbstractOperation
+        implements /*PartitionLevelOperation, */ MigrationCycleOperation {
 
     private MigrationEndpoint endpoint;     // source of destination
     private MigrationType type;       // move or copy
@@ -47,7 +47,6 @@ public final class FinalizeMigrationOperation extends AbstractOperation
         this.type = type;
         this.copyBackReplicaIndex = copyBackReplicaIndex;
     }
-
 
     public void run() {
         final Collection<MigrationAwareService> services = getServices();
