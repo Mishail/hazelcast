@@ -167,18 +167,18 @@ final class OperationServiceImpl implements OperationService {
                 }
                 final ReadWriteLock migrationLock = partitionLocks[partitionId];
                 if (op instanceof PartitionLevelOperation) {
-                    final Lock tmpPartitionLock = migrationLock.writeLock();
-                    if (!tmpPartitionLock.tryLock(60, TimeUnit.SECONDS)) {     // TODO: @mm !
-                        throw new IllegalStateException("COULD NOT ACQUIRE MIGRATION LOCK!");
-                    }
-                    partitionLock = tmpPartitionLock;
+//                    final Lock tmpPartitionLock = migrationLock.writeLock();
+//                    if (!tmpPartitionLock.tryLock(60, TimeUnit.SECONDS)) {     // TODO: @mm !
+//                        throw new IllegalStateException("COULD NOT ACQUIRE MIGRATION LOCK!");
+//                    }
+//                    partitionLock = tmpPartitionLock;
                 } else {
-                    final Lock tmpPartitionLock = migrationLock.readLock();
-                    if (!tmpPartitionLock.tryLock(100, TimeUnit.MILLISECONDS)) {
-                        throw new PartitionMigratingException(node.getThisAddress(), partitionId,
-                                op.getClass().getName(), op.getServiceName());
-                    }
-                    partitionLock = tmpPartitionLock;
+//                    final Lock tmpPartitionLock = migrationLock.readLock();
+//                    if (!tmpPartitionLock.tryLock(100, TimeUnit.MILLISECONDS)) {
+//                        throw new PartitionMigratingException(node.getThisAddress(), partitionId,
+//                                op.getClass().getName(), op.getServiceName());
+//                    }
+//                    partitionLock = tmpPartitionLock;
                     final PartitionInfo partitionInfo = nodeEngine.getPartitionService().getPartitionInfo(partitionId);
                     if (partitionInfo == null) {
                         throw new PartitionMigratingException(node.getThisAddress(), partitionId,
@@ -192,11 +192,11 @@ final class OperationServiceImpl implements OperationService {
                     if (op instanceof KeyBasedOperation && !(op instanceof BackupOperation)) {
                         final int hash = ((KeyBasedOperation) op).getKeyHash();
                         final Lock[] locks = ownerLocks;
-                        final Lock tmpKeyLock = locks[Math.abs(hash) % locks.length];
-                        if (!tmpKeyLock.tryLock(100, TimeUnit.MILLISECONDS)) {
-                            throw new RetryableHazelcastException("Key lock cannot be acquired!");
-                        }
-                        keyLock = tmpKeyLock;
+//                        final Lock tmpKeyLock = locks[Math.abs(hash) % locks.length];
+//                        if (!tmpKeyLock.tryLock(100, TimeUnit.MILLISECONDS)) {
+//                            throw new RetryableHazelcastException("Key lock cannot be acquired!");
+//                        }
+//                        keyLock = tmpKeyLock;
                     }
                 }
             }
