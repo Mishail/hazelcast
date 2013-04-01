@@ -72,15 +72,21 @@ public final class SpinReadWriteLock {
         readCount.decrementAndGet();
     }
 
-    private void acquireWriteLock() throws InterruptedException {
+    private boolean acquireWriteLock(final long time, TimeUnit unit) throws InterruptedException {
         final long spin = spinInterval;
         while (!locked.compareAndSet(false, true)) {
             Thread.sleep(spin);
         }
+        final long timeInMillis = unit.toMillis(time > 0 ? time : 0);
+        long elapsed = 0L;
         while (readCount.get() > 0) {
             Thread.sleep(spin);
+            if ((elapsed += spin) > timeInMillis) {
+                locked.set(false);
+                return false;
+            }
         }
-        // go on ...
+        return true;
     }
 
     private void releaseWriteLock() {
@@ -117,13 +123,14 @@ public final class SpinReadWriteLock {
     private final class WriteLock implements SpinLock {
 
         public void lock() throws InterruptedException{
-            acquireWriteLock();
+            if (!tryLock(Long.MAX_VALUE, TimeUnit.MILLISECONDS)) {
+                throw new HazelcastException();
+            }
         }
 
         public boolean tryLock() {
-            // TODO: tryLock can be implemented later...
             try {
-                acquireWriteLock();
+                acquireWriteLock(0, TimeUnit.MILLISECONDS);
                 return true;
             } catch (InterruptedException e) {
                 return false;
@@ -131,9 +138,7 @@ public final class SpinReadWriteLock {
         }
 
         public boolean tryLock(long time, TimeUnit unit) throws InterruptedException {
-            // TODO: tryLock can be implemented later...
-            acquireWriteLock();
-            return true;
+            return acquireWriteLock(time, unit);
         }
 
         public void unlock() {
