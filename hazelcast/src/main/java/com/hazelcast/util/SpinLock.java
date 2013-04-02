@@ -32,6 +32,8 @@ public final class SpinLock implements Lock {
 
     private final AtomicBoolean locked = new AtomicBoolean(false);
 
+    private long tid = -1L;
+
     public SpinLock() {
         spinInterval = 1;
     }
