@@ -34,7 +34,6 @@ import com.hazelcast.spi.annotation.PrivateApi;
 import com.hazelcast.spi.exception.*;
 import com.hazelcast.spi.impl.PartitionIteratingOperation.PartitionResponse;
 import com.hazelcast.util.Clock;
-import com.hazelcast.util.SpinReadWriteLock;
 import com.hazelcast.util.executor.BlockingFastExecutor;
 import com.hazelcast.util.executor.FastExecutor;
 import com.hazelcast.util.executor.PoolExecutorThreadFactory;
@@ -46,6 +45,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.logging.Level;
 
 /**
@@ -97,13 +97,14 @@ final class OperationServiceImpl implements OperationService {
 
         ownerLocks = new Lock[100000];
         for (int i = 0; i < ownerLocks.length; i++) {
+//            ownerLocks[i] = new SpinLock();
             ownerLocks[i] = new ReentrantLock();
         }
         int partitionCount = node.groupProperties.PARTITION_COUNT.getInteger();
         partitionLocks = new ReadWriteLock[partitionCount];
         for (int i = 0; i < partitionCount; i++) {
-            partitionLocks[i] = new SpinReadWriteLock(1, TimeUnit.MILLISECONDS);
-//            partitionLocks[i] = new ReentrantReadWriteLock();
+//            partitionLocks[i] = new SpinReadWriteLock();
+            partitionLocks[i] = new ReentrantReadWriteLock();
         }
         executingCalls = Collections.newSetFromMap(new ConcurrentHashMap<RemoteCallKey, Boolean>(1000, 0.75f, (reallyMultiCore ? coreSize * 4 : 16)));
     }
